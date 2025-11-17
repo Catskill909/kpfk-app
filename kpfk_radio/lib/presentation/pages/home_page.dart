@@ -695,7 +695,7 @@ class _HomePageState extends State<HomePage> {
         return const FractionallySizedBox(
           heightFactor: 0.9,
           child: DonateWebViewSheet(
-            initialUrl: 'https://docs.pacifica.org/kpfk/kpfk-privacy.php',
+            initialUrl: 'https://docs.pacifica.org/wpfw/donate/',
           ),
         );
       },
