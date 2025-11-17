@@ -9,7 +9,7 @@ class AudioServerHealthChecker {
   static final Dio _dio = Dio();
   static const Duration _healthCheckTimeout = Duration(seconds: 5);
   static const Duration _cacheTimeout = Duration(seconds: 30);
-  
+
   // Cache to prevent excessive health checks
   static DateTime? _lastHealthCheck;
   static bool? _lastHealthResult;
@@ -25,38 +25,50 @@ class AudioServerHealthChecker {
   /// Checks if the audio server is healthy and can serve streams
   /// Returns true if server is available, false if server-specific issues
   /// Throws exception for network connectivity issues
-  static Future<AudioServerHealthResult> checkServerHealth(String streamUrl) async {
+  static Future<AudioServerHealthResult> checkServerHealth(
+      String streamUrl) async {
     try {
       // Check cache first to prevent excessive requests
       if (_lastHealthCheck != null && _lastHealthResult != null) {
         final timeSinceLastCheck = DateTime.now().difference(_lastHealthCheck!);
         if (timeSinceLastCheck < _cacheTimeout) {
-          LoggerService.info('🏥 AudioServerHealthChecker: Using cached result: $_lastHealthResult');
+          LoggerService.info(
+              '🏥 AudioServerHealthChecker: Using cached result: $_lastHealthResult');
           return AudioServerHealthResult(
             isHealthy: _lastHealthResult!,
-            errorType: _lastHealthResult! ? null : AudioServerErrorType.serverUnavailable,
+            errorType: _lastHealthResult!
+                ? null
+                : AudioServerErrorType.serverUnavailable,
             statusCode: _lastHealthResult! ? 200 : null,
           );
         }
       }
 
       _configureDio();
-      LoggerService.info('🏥 AudioServerHealthChecker: Checking server health for: $streamUrl');
+      LoggerService.info(
+          '🏥 AudioServerHealthChecker: Checking server health for: $streamUrl');
 
-      // First try HEAD request to check if server responds
-      final response = await _dio.head(
+      // Use GET request instead of HEAD for Icecast/Shoutcast compatibility
+      // Icecast servers return 400 for HEAD requests but 200 for GET
+      final response = await _dio.get(
         streamUrl,
         options: Options(
           validateStatus: (status) => status != null && status < 500,
+          responseType: ResponseType.stream, // Don't download the entire stream
+          headers: {
+            'Range':
+                'bytes=0-0', // Request only 1 byte to minimize data transfer
+          },
         ),
       );
 
       final statusCode = response.statusCode ?? 0;
-      LoggerService.info('🏥 AudioServerHealthChecker: Server responded with status: $statusCode');
+      LoggerService.info(
+          '🏥 AudioServerHealthChecker: Server responded with status: $statusCode');
 
       // Cache the result
       _lastHealthCheck = DateTime.now();
-      
+
       // Analyze response
       if (statusCode >= 200 && statusCode < 300) {
         // Server is healthy
@@ -102,15 +114,14 @@ class AudioServerHealthChecker {
           message: 'Server error occurred',
         );
       }
-
     } on SocketException catch (e) {
       LoggerService.audioError('🏥 AudioServerHealthChecker: Network error', e);
       // This is a network connectivity issue, not a server issue
-      throw NetworkConnectivityException('Network connectivity issue: ${e.message}');
-      
+      throw NetworkConnectivityException(
+          'Network connectivity issue: ${e.message}');
     } on DioException catch (e) {
       LoggerService.audioError('🏥 AudioServerHealthChecker: Dio error', e);
-      
+
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout) {
@@ -135,9 +146,9 @@ class AudioServerHealthChecker {
         // Other Dio errors
         throw NetworkConnectivityException('Network error: ${e.message}');
       }
-      
     } catch (e) {
-      LoggerService.audioError('🏥 AudioServerHealthChecker: Unexpected error', e);
+      LoggerService.audioError(
+          '🏥 AudioServerHealthChecker: Unexpected error', e);
       _lastHealthResult = false;
       _lastHealthCheck = DateTime.now();
       return AudioServerHealthResult(
@@ -159,11 +170,15 @@ class AudioServerHealthChecker {
   static Future<bool> quickPing(String streamUrl) async {
     try {
       _configureDio();
-      final response = await _dio.head(
+      final response = await _dio.get(
         streamUrl,
         options: Options(
           sendTimeout: const Duration(seconds: 2),
           receiveTimeout: const Duration(seconds: 2),
+          responseType: ResponseType.stream,
+          headers: {
+            'Range': 'bytes=0-0',
+          },
         ),
       );
       return response.statusCode != null && response.statusCode! < 500;
@@ -195,20 +210,20 @@ class AudioServerHealthResult {
 
 /// Types of audio server errors
 enum AudioServerErrorType {
-  serverUnavailable,    // Server is down or not responding
-  streamNotFound,       // 404 - Stream endpoint not found
-  serverOverloaded,     // 503 - Server temporarily overloaded
-  authenticationError,  // 401/403 - Access denied
-  connectionTimeout,    // Connection or response timeout
-  serverError,          // 5xx server errors
-  unknownError,         // Unexpected errors
+  serverUnavailable, // Server is down or not responding
+  streamNotFound, // 404 - Stream endpoint not found
+  serverOverloaded, // 503 - Server temporarily overloaded
+  authenticationError, // 401/403 - Access denied
+  connectionTimeout, // Connection or response timeout
+  serverError, // 5xx server errors
+  unknownError, // Unexpected errors
 }
 
 /// Exception for network connectivity issues (not server issues)
 class NetworkConnectivityException implements Exception {
   final String message;
   const NetworkConnectivityException(this.message);
-  
+
   @override
   String toString() => 'NetworkConnectivityException: $message';
 }
