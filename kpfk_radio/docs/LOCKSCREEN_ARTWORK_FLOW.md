@@ -17,7 +17,7 @@
 │   {                                                              │
 │     "sh_name": "Democracy Now!",                                 │
 │     "sh_djname": "Amy Goodman",                                  │
-│     "sh_photo": "https://kpfk.org/images/show123.jpg"           │
+│     "big_pix": "democracy_now_210.jpg"  // Filename only, full URL: https://confessor.kpfk.org/pix/{big_pix}           │
 │   }                                                              │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
@@ -101,7 +101,7 @@ PROBLEM: User sees blank image for 0.5-3 seconds, then image "pops in"
 │   {                                                              │
 │     "sh_name": "Democracy Now!",                                 │
 │     "sh_djname": "Amy Goodman",                                  │
-│     "sh_photo": "https://kpfk.org/images/show123.jpg"           │
+│     "big_pix": "democracy_now_210.jpg"  // Filename only, full URL: https://confessor.kpfk.org/pix/{big_pix}           │
 │   }                                                              │
 └─────────────────────────────────────────────────────────────────┘
                               ↓

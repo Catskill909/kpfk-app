@@ -215,7 +215,7 @@ Enable Xcode console and watch for these log patterns:
 4. Is artwork URL actually changing?
 
 **Solution**:
-- Verify metadata service returns valid `sh_photo` URL
+- Verify metadata service returns valid `big_pix` filename and constructs full URL
 - Test with different network conditions
 - Check if timeout is too aggressive (increase if needed)
 

@@ -21,7 +21,7 @@
   "current": {
     "sh_name": "Democracy Now!",
     "sh_djname": "Amy Goodman",
-    "sh_photo": "https://confessor.kpfk.org/pix/democracy_now_97.jpg"
+    "big_pix": "democracy_now_97.jpg"  // Filename only, full URL constructed in code
   }
 }
 ```
@@ -35,7 +35,7 @@
 
 **Code** (line 29):
 ```dart
-hostImage: json['sh_photo'],
+hostImage: imageUrl,  // Constructed from big_pix: 'https://confessor.kpfk.org/pix/{big_pix}'
 ```
 
 **Result**: `hostImage = "https://confessor.kpfk.org/pix/democracy_now_97.jpg"`

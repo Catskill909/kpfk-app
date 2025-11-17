@@ -20,30 +20,44 @@ class ShowInfo extends Equatable {
   });
 
   factory ShowInfo.fromJson(Map<String, dynamic> json) {
+    // Construct full image URL from big_pix filename
+    // big_pix contains just the filename (e.g., "friedman_it_210.jpg")
+    // We need to prepend the base URL from gl_pixurl
+    String? imageUrl;
+    final bigPix = json['big_pix'];
+    if (bigPix != null && bigPix.toString().isNotEmpty) {
+      // Use the base URL from the feed's global settings
+      imageUrl = 'https://confessor.kpfk.org/pix/$bigPix';
+    }
+
     return ShowInfo(
       showName: StringUtils.decodeHtmlEntities(json['sh_name'] ?? ''),
       host: StringUtils.decodeHtmlEntities(json['sh_djname'] ?? ''),
-      time: '${json['cur_start'] ?? ''}${json['cur_end'] != null ? ' - ${json['cur_end']}' : ''}',
-      songTitle: json['pl_song'] != null ? StringUtils.decodeHtmlEntities(json['pl_song']) : null,
-      songArtist: json['pl_artist'] != null ? StringUtils.decodeHtmlEntities(json['pl_artist']) : null,
-      hostImage: json['sh_photo'],
+      time:
+          '${json['cur_start'] ?? ''}${json['cur_end'] != null ? ' - ${json['cur_end']}' : ''}',
+      songTitle: json['pl_song'] != null
+          ? StringUtils.decodeHtmlEntities(json['pl_song'])
+          : null,
+      songArtist: json['pl_artist'] != null
+          ? StringUtils.decodeHtmlEntities(json['pl_artist'])
+          : null,
+      hostImage: imageUrl,
     );
   }
 
   /// Returns true if this show has song information
-  bool get hasSongInfo => 
-      songTitle != null && 
+  bool get hasSongInfo =>
+      songTitle != null &&
       songTitle!.isNotEmpty &&
-      songArtist != null && 
+      songArtist != null &&
       songArtist!.isNotEmpty;
 
   /// Returns true if there is a host image available
-  bool get hasHostImage => 
-      hostImage != null && 
-      hostImage!.isNotEmpty;
+  bool get hasHostImage => hostImage != null && hostImage!.isNotEmpty;
 
   @override
-  List<Object?> get props => [showName, host, time, songTitle, songArtist, hostImage];
+  List<Object?> get props =>
+      [showName, host, time, songTitle, songArtist, hostImage];
 
   @override
   String toString() {
@@ -66,29 +80,28 @@ class StreamMetadata extends Equatable {
     if (jsonData is String) {
       jsonData = json.decode(jsonData);
     }
-    
+
     if (jsonData is! List || jsonData.length < 3) {
       throw FormatException('Invalid API response format');
     }
-    
+
     return StreamMetadata(
-      previous: ShowInfo.fromJson({}),  // We don't use previous show info
+      previous: ShowInfo.fromJson({}), // We don't use previous show info
       current: ShowInfo.fromJson(jsonData[1]['current']),
       next: ShowInfo.fromJson(jsonData[2]['next']),
     );
   }
 
   /// Returns true if the current show has song information
-  bool get hasSongInfo => 
-      current.songTitle != null && 
+  bool get hasSongInfo =>
+      current.songTitle != null &&
       current.songTitle!.isNotEmpty &&
-      current.songArtist != null && 
+      current.songArtist != null &&
       current.songArtist!.isNotEmpty;
 
   /// Returns true if there is a host image available
-  bool get hasHostImage => 
-      current.hostImage != null && 
-      current.hostImage!.isNotEmpty;
+  bool get hasHostImage =>
+      current.hostImage != null && current.hostImage!.isNotEmpty;
 
   @override
   List<Object?> get props => [previous, current, next];
