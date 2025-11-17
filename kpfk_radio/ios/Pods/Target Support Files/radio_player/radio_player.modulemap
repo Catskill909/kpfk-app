@@ -1,0 +1,6 @@
+framework module radio_player {
+  umbrella header "radio_player-umbrella.h"
+
+  export *
+  module * { export * }
+}
