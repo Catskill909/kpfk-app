@@ -1,14 +1,17 @@
 # App Configuration Notes
 
 ## Application ID
-The application ID for both platforms will be: `app.pacifica.wpfw`
+**Android:** `app.pacifica.kpfk`  
+**iOS:** `com.pacifica.kpfk`
+
+Note: Android and iOS use different bundle identifier formats by design.
 
 ### Android Configuration
 Required changes in `android/app/build.gradle`:
 ```gradle
 android {
     defaultConfig {
-        applicationId "app.pacifica.wpfw"
+        applicationId "app.pacifica.kpfk"
         ...
     }
 }
@@ -17,19 +20,21 @@ android {
 And in `android/app/src/main/AndroidManifest.xml`:
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="app.pacifica.wpfw">
+    package="app.pacifica.kpfk">
 ```
 
 ### iOS Configuration
 Required changes in `ios/Runner.xcodeproj/project.pbxproj`:
 ```
-PRODUCT_BUNDLE_IDENTIFIER = app.pacifica.wpfw;
+PRODUCT_BUNDLE_IDENTIFIER = com.pacifica.kpfk;
 ```
 
 And in `ios/Runner/Info.plist`:
 ```xml
 <key>CFBundleIdentifier</key>
-<string>app.pacifica.wpfw</string>
+<string>com.pacifica.kpfk</string>
+<key>CFBundleDisplayName</key>
+<string>KPFK</string>
 ```
 
 ## Implementation Steps
