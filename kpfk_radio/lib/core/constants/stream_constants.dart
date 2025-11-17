@@ -1,6 +1,6 @@
 class StreamConstants {
-  // Use HTTPS M3U playlist - CONFIRMED WORKING on Android by user
-  static const String streamUrl = 'https://docs.pacifica.org/kpfk/kpfk.m3u';
+  // Direct Icecast stream endpoint
+  static const String streamUrl = 'https://streams.pacifica.org:9000/kpfk_128';
 
   // Legacy baseUrl kept for reference (no longer used for streaming)
   static const String baseUrl = 'https://streams.pacifica.org:9000';
