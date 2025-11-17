@@ -52,6 +52,20 @@ wpfw_radio/android/.gradle/
 wpfw_radio/android/app/build/
 wpfw_radio/android/build/
 
+# KPFK app build directories
+kpfk_radio/.dart_tool/
+kpfk_radio/build/
+kpfk_radio/.flutter-plugins
+kpfk_radio/.flutter-plugins-dependencies
+kpfk_radio/.packages
+kpfk_radio/.pub-cache/
+kpfk_radio/.pub/
+kpfk_radio/ios/Pods/
+kpfk_radio/ios/.symlinks/
+kpfk_radio/android/.gradle/
+kpfk_radio/android/app/build/
+kpfk_radio/android/build/
+
 # Keystore files
 *.jks
 *.keystore
