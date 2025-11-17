@@ -43,8 +43,8 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       title: "KPFK 90.7 FM",
       artist: "Pacifica Radio",
       duration: const Duration(hours: 24),
-      artUri:
-          Uri.parse("https://confessor.kpfk.org/playlist/images/kpfk_logo.png"),
+      // REMOVED: Broken placeholder artwork that was causing 404 errors and overriding real artwork
+      // artUri: Uri.parse("https://confessor.kpfk.org/playlist/images/kpfk_logo.png"),
     );
 
     // DELAY: Don't show generic player immediately - wait for real metadata
@@ -486,8 +486,8 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       title: title,
       artist: artist,
       duration: const Duration(hours: 24),
-      artUri:
-          Uri.parse("https://confessor.kpfk.org/playlist/images/kpfk_logo.png"),
+      // REMOVED: Broken placeholder artwork that was causing 404 errors and overriding real artwork
+      // artUri: Uri.parse("https://confessor.kpfk.org/playlist/images/kpfk_logo.png"),
     );
 
     // Let _broadcastState handle the mediaItem.add() call (SINGLE SOURCE OF TRUTH)
@@ -658,34 +658,21 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> updateMediaItem(MediaItem mediaItem) async {
     LoggerService.info(
-        '🔍 METADATA BATTLE: updateMediaItem() called with title="${mediaItem.title}", artist="${mediaItem.artist}"');
-    LoggerService.info(
-        '🔍 METADATA BATTLE: This is a COMPETING SOURCE - should be eliminated!');
+        '✅ STANDARD FLUTTER: updateMediaItem() called with title="${mediaItem.title}", artist="${mediaItem.artist}"');
 
-    // REMOVED: This was breaking single source of truth!
-    // Android: allow MediaItem updates to drive notification/lockscreen
-    // if (Platform.isAndroid) {
-    //   LoggerService.info('🤖 ANDROID: Applying MediaItem to notification');
-    //   this.mediaItem.add(mediaItem);
-    //   _debugDumpAndroidState('updateMediaItem:applied');
-    //   return;
-    // }
+    // STANDARD APPROACH: Let audio_service handle lockscreen on ALL platforms!
+    // This is how EVERY Flutter audio app works - audio_service handles:
+    // - iOS: MPNowPlayingInfoCenter + artwork download
+    // - Android: MediaSession + notification
+    // - Lifecycle events, caching, everything!
 
-    // NEW: Update _currentMediaItem instead of calling mediaItem.add() directly
-    if (Platform.isAndroid) {
-      LoggerService.info(
-          '🎯 METADATA FIX: Updating _currentMediaItem instead of direct mediaItem.add()');
-      _currentMediaItem = mediaItem;
-      // Let _broadcastState handle the actual mediaItem.add() call
-      return;
-    }
+    _currentMediaItem = mediaItem;
+    this.mediaItem.add(mediaItem); // ✅ LET THE FRAMEWORK DO ITS JOB!
 
-    // iOS: Ignore to keep Swift as single source of truth
-    LoggerService.info('🎵 ==== iOS LOCKSCREEN DEBUG ====');
     LoggerService.info(
-        '🎵 Received media item update request: Title="${mediaItem.title}", Artist="${mediaItem.artist ?? ''}"');
+        '✅ STANDARD FLUTTER: MediaItem set - audio_service will handle lockscreen/notification');
     LoggerService.info(
-        '🎵 IGNORING MediaItem update - using Swift implementation only');
+        '✅ Artwork URL: ${mediaItem.artUri?.toString() ?? "none"}');
   }
 
   // ANDROID: deep diagnostics helper - does not change behavior

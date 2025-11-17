@@ -103,11 +103,18 @@ import AVFoundation
     private var lastArtworkUrl: String?
     private var cachedArtwork: MPMediaItemArtwork?
     private var pendingMetadataUpdate: [String: Any]?
+    private var isSettingArtwork: Bool = false  // Lock to prevent overrides
     
     /// Apply the pending metadata update on the main thread
     private func applyPendingMetadataUpdate() {
         // Must be called on main thread
         DispatchQueue.main.async {
+            // CRITICAL: Don't update if we're in the middle of setting artwork
+            if self.isSettingArtwork {
+                print("[METADATA] ⚠️ BLOCKED update - artwork is being set")
+                return
+            }
+            
             guard let update = self.pendingMetadataUpdate else { return }
             
             // Extract values
@@ -137,9 +144,27 @@ import AVFoundation
             // CRITICAL FIX: Use cached artwork immediately if available (same URL)
             if let currentUrl = currentArtworkUrl, currentUrl == self.lastArtworkUrl, let cachedArtwork = self.cachedArtwork {
                 // Same artwork URL - use cached artwork and set metadata immediately
+                let timestamp = Date().timeIntervalSince1970
+                print("[TIMESTAMP-\(timestamp)] ⚡ Using CACHED artwork for lockscreen")
+                print("[TIMESTAMP-\(timestamp)] Title: \(title), Artist: \(artist)")
+                print("[TIMESTAMP-\(timestamp)] Cached artwork URL: \(currentUrl)")
+                
                 nowPlayingInfo[MPMediaItemPropertyArtwork] = cachedArtwork
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+                
+                print("[TIMESTAMP-\(timestamp)] ✅ Lockscreen set with CACHED artwork")
                 print("[METADATA] ✅ Using cached artwork for same URL: \(currentUrl)")
+                
+                // Verify it stuck after 100ms
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    let current = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                    let hasArtwork = current?[MPMediaItemPropertyArtwork] != nil
+                    print("[VERIFY-CACHED-100ms] Artwork present: \(hasArtwork)")
+                    if !hasArtwork {
+                        print("[VERIFY-CACHED-100ms] ❌ CACHED ARTWORK DISAPPEARED!")
+                    }
+                }
+                
                 return // Early return - no download needed
             }
             
@@ -182,10 +207,21 @@ import AVFoundation
                             let timestamp2 = Date().timeIntervalSince1970
                             print("[TIMESTAMP-\(timestamp2)] 🎨 Adding artwork to lockscreen")
                             print("[TIMESTAMP-\(timestamp2)] Artwork size: \(image.size)")
+                            
+                            // CRITICAL: Lock to prevent ANY other updates for 2 seconds
+                            self.isSettingArtwork = true
+                            print("[LOCK] 🔒 Metadata updates LOCKED for 2 seconds")
+                            
                             var updatedInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? nowPlayingInfo
                             updatedInfo[MPMediaItemPropertyArtwork] = artwork
                             MPNowPlayingInfoCenter.default().nowPlayingInfo = updatedInfo
                             print("[TIMESTAMP-\(timestamp2)] ✅ Artwork SET on lockscreen")
+                            
+                            // Keep lock for 2 seconds to prevent overrides
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                self.isSettingArtwork = false
+                                print("[LOCK] 🔓 Metadata updates UNLOCKED")
+                            }
                             
                             // CRITICAL: Verify artwork persists
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -439,15 +475,20 @@ import AVFoundation
         // Ensure audio session is active when app becomes active
         configureAudioSession()
         
-        // Refresh metadata if we have any
+        // Refresh metadata if we have any - INCLUDE ARTWORK URL!
         if let title = lastTitle, let artist = lastArtist, let isPlaying = lastIsPlaying {
             print("[LIFECYCLE] Refreshing metadata on become active: \(title) by \(artist)")
-            let metadata: [String: Any] = [
+            var metadata: [String: Any] = [
                 "title": title,
                 "artist": artist,
                 "isPlaying": isPlaying,
                 "forceUpdate": true
             ]
+            // CRITICAL FIX: Include artwork URL if we have it!
+            if let artworkUrl = lastArtworkUrl {
+                metadata["artworkUrl"] = artworkUrl
+                print("[LIFECYCLE] Including artwork URL: \(artworkUrl)")
+            }
             pendingMetadataUpdate = metadata
             applyPendingMetadataUpdate()
         }
@@ -479,6 +520,13 @@ import AVFoundation
     
     /// Handle updateNowPlaying method from IOSLockscreenService
     private func handleUpdateNowPlaying(call: FlutterMethodCall, result: FlutterResult) {
+        // CRITICAL: Don't update if we're in the middle of setting artwork
+        if isSettingArtwork {
+            print("[NOW_PLAYING] ⚠️ BLOCKED update - artwork is being set")
+            result(false)
+            return
+        }
+        
         // Extract metadata from arguments
         guard let args = call.arguments as? [String: Any],
               let title = args["title"] as? String,

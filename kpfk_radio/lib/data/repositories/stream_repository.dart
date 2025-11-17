@@ -384,53 +384,21 @@ class StreamRepository {
 
     LoggerService.info(
         '🎵 SENDING TO LOCKSCREEN: Title="$title", Artist="$artist"');
-    // DUAL APPROACH: Use both methods to ensure lockscreen updates
 
-    // 1. Update through audio_service for Android and basic iOS support
-    if (Platform.isAndroid && !isPlaying) {
-      LoggerService.info(
-          '🤖 ANDROID: Skipping updateMediaItem because not playing yet');
+    // ✅ STANDARD FLUTTER APPROACH: Let audio_service handle EVERYTHING!
+    // This works for iOS, Android, lifecycle events, artwork caching, etc.
+    // No custom Swift code needed - audio_service does it all!
 
-      // CRITICAL: But still update Samsung MediaSession even when not playing
-      LoggerService.info(
-          '🔍 SAMSUNG DEBUG: Updating Samsung MediaSession directly (not playing)');
-      try {
-        // Import needed at top of file
-        // await SamsungMediaSessionService.updateMetadata(title, artist);
-        LoggerService.info(
-            '🔍 SAMSUNG DEBUG: Samsung MediaSession updated with metadata while not playing');
-      } catch (e) {
-        LoggerService.error(
-            '🔍 SAMSUNG DEBUG: Failed to update Samsung MediaSession: $e');
-      }
-    } else {
-      LoggerService.info(
-          '🎵 Handler.updateMediaItem: platform=${Platform.isAndroid ? 'Android' : 'iOS'}, isPlaying=$isPlaying');
-      _audioHandler.updateMediaItem(mediaItem);
-    }
+    LoggerService.info(
+        '✅ STANDARD: Calling audioHandler.updateMediaItem() - framework will handle lockscreen');
+    LoggerService.info(
+        '✅ Platform: ${Platform.isAndroid ? 'Android' : 'iOS'}, isPlaying: $isPlaying');
+    LoggerService.info('✅ Artwork URL: ${showInfo.hostImage ?? "none"}');
 
-    // 2. CRITICAL FIX: Direct native iOS implementation for reliable lockscreen updates
-    if (Platform.isIOS) {
-      LoggerService.info(
-          '🎵 Using OPTIMIZED NATIVE iOS implementation for lockscreen');
+    _audioHandler.updateMediaItem(mediaItem);
 
-      // We already have the current playback state
-      LoggerService.info('🎵 Current playback state: playing=$isPlaying');
-
-      // Use the optimized NativeMetadataService which handles refresh scheduling internally
-      // This prevents the cascade of refresh calls that was causing excessive updates
-      _nativeMetadataService.updateLockscreenMetadata(
-        title: title,
-        artist: artist,
-        artworkUrl: showInfo.hostImage,
-        isPlaying: isPlaying,
-      );
-
-      // Note: The NativeMetadataService now handles all refresh scheduling internally,
-      // with proper timer cleanup to prevent cascading updates
-    }
-    // Android: No extra path needed. Earlier call to _audioHandler.updateMediaItem(mediaItem)
-    // now updates the notification via just_audio_background. iOS path above remains intact.
+    LoggerService.info(
+        '✅ STANDARD: MediaItem sent to audio_service - it will handle all platform-specific details');
   }
 
   /// Handle server-specific errors and reset audio controls
