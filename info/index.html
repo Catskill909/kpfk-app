@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>KPFT Now Playing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter&family=Oswald:wght@500&family=Roboto+Condensed:wght@600&display=swap"
+      rel="stylesheet"
+    />
+    <style type="text/css">
+      body {
+        background-color: #0f0404;
+        font-family: "Roboto Condensed", sans-serif;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      h2 {
+        font-size: 5vw;
+      }
+
+
+      #current_text,
+      #next_text {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2; /* Standard property for compatibility */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2em;
+        max-height: 2.4em;
+        white-space: normal;
+        padding-top: 16px;
+        color: white;
+        text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000,
+          1px 1px 0 #000;
+        max-width: 86%;
+        word-wrap: break-word;
+        text-align: center;
+      }
+      #current_song {
+        font-size: 0.8em;
+        padding-top: 10px;
+        color: white;
+        text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000,
+          1px 1px 0 #000;
+        max-width: 86%;
+        word-wrap: break-word;
+        text-align: center;
+        white-space: normal; /* Changed to allow text wrapping */
+        /* Removed or adjusted overflow properties */
+      }
+
+
+      .img-container {
+        width: 280px;
+        height: 280px;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border: 2px solid #000;
+        box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5);
+        margin-top: 20px;
+        border-radius: 20px;
+      }
+
+      .img {
+        border-radius: 20px;
+      }
+
+      .img-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      /* Base sizes */
+      #current_text,
+      #current_song,
+      #next_text {
+        font-size: 16px;
+        padding-top: 6px;
+      }
+
+      @media (min-width: 768px) {
+        .img-container {
+          width: 520px;
+          height: 520px;
+        }
+        #current_text,
+        #current_song {
+          font-size: 32px;
+        }
+        #next_text {
+          font-size: 28px;
+        }
+      }
+
+      @media (min-width: 400px) and (max-width: 767px) {
+        .img-container {
+          width: 340px;
+          height: 340px;
+        }
+        #current_text,
+        #current_song {
+          font-size: 20px;
+        }
+        #next_text {
+          font-size: 18px;
+        }
+      }
+
+      #current_host,
+      #next_host,
+      #next_time,
+      .hidden-br {
+        display: none;
+      }
+
+      .content-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: start;
+        align-items: center;
+        width: 100%;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="content-container">
+      <div class="img-container">
+        <img id="host_pix" src="" alt="Host Image" style="display: none" />
+      </div>
+      <div id="current_text">
+        <b>Live:</b> <span id="cur_show"></span><br />
+        <span id="current_host"></span><br class="hidden-br" />
+        <span id="current_time"></span>
+      </div>
+
+      <!-- New div for displaying pl_song and pl_artist -->
+      <div id="current_song">
+        <span id="current_song_title"></span><br />
+        <span id="current_song_artist"></span>
+      </div>
+
+      <div id="next_text">
+        <b>Next Show:</b> <span id="next_show"></span><br class="hidden-br" />
+        <span id="next_host"></span><br class="hidden-br" />
+        <span id="next_time"></span>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      function decodeHtml(html) {
+        var txt = document.createElement("textarea");
+        txt.innerHTML = html;
+        return txt.value;
+      }
+
+      function set_current(current) {
+        document.getElementById("cur_show").textContent = decodeHtml(
+          current.sh_name || "Not available"
+        );
+        document.getElementById("current_host").textContent =
+          "with " + decodeHtml(current.sh_djname || "Various hosts");
+        document.getElementById("current_time").textContent =
+          current.cur_start + " - " + current.cur_end;
+
+        var host_pix = document.getElementById("host_pix");
+        if (current.sh_photo && !current.sh_photo.endsWith("KPFT.jpg")) {
+          host_pix.src = current.sh_photo;
+        } else {
+          host_pix.src = "kpft2.png";
+        }
+        host_pix.style.display = "";
+      }
+
+      function set_next(next) {
+        document.getElementById("next_show").textContent = decodeHtml(
+          next.sh_name || "Not available"
+        );
+        document.getElementById("next_host").textContent =
+          "with " + decodeHtml(next.sh_djname || "Various hosts");
+        document.getElementById("next_time").textContent =
+          next.nxt_start + " - " + next.nxt_end;
+      }
+
+      function updateCurrentSong(data) {
+        var songTitleDiv = document.getElementById("current_song_title");
+        var songArtistDiv = document.getElementById("current_song_artist");
+        var nextTextDiv = document.getElementById("next_text");
+
+        // Update song title and artist with original functionality
+        if (
+          data &&
+          data.current &&
+          data.current.pl_song &&
+          data.current.pl_artist
+        ) {
+          var song = "Song: " + decodeHtml(data.current.pl_song);
+          var artist = "Artist: " + decodeHtml(data.current.pl_artist);
+
+          songTitleDiv.innerHTML = applyBalancedBreaks(song); // Using innerHTML for potential <br> tags
+          songArtistDiv.innerHTML = applyBalancedBreaks(artist); // Using innerHTML for potential <br> tags
+          document.getElementById("current_song").style.display = ""; // Ensure div is visible
+        } else {
+          // Hide the div if there's no data
+          document.getElementById("current_song").style.display = "none";
+        }
+
+        // Additional functionality to control the display of next_text
+        if (data.current && (data.current.pl_song || data.current.pl_artist)) {
+          // Hide next_text if current_song has content
+          nextTextDiv.style.display = "none";
+        } else {
+          // Show next_text if current_song has no content
+          nextTextDiv.style.display = "block";
+        }
+      }
+
+      // Function to apply balanced breaks only when there's a forced line break
+      function applyBalancedBreaks(text) {
+        // Check if there's a forced line break
+        if (text.includes("<br>")) {
+          var parts = text.split("<br>");
+          var balancedText = "";
+
+          parts.forEach((part) => {
+            var words = part.trim().split(" ");
+            var midPoint = Math.floor(words.length / 2);
+            var line1 = words.slice(0, midPoint).join(" ");
+            var line2 = words.slice(midPoint).join(" ");
+
+            balancedText += line1 + "<br>" + line2;
+          });
+
+          return balancedText;
+        } else {
+          // No forced line break, return text as is
+          return text;
+        }
+      }
+
+      // Inside your data fetching function
+      function get_data() {
+        fetch("proxy.php")
+          .then((response) => response.json())
+          .then((data) => {
+            if (data && data.length >= 3) {
+              set_current(data[1].current);
+              set_next(data[2].next);
+              updateCurrentSong(data[1]); // Updated to pass the correct object
+            } else {
+              console.error("Show data is not in the expected format.");
+            }
+          })
+          .catch((error) => console.error("Error fetching KPFT data:", error));
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        get_data();
+        setInterval(get_data, 10000);
+      });
+
+      function balanceText(textElement) {
+        let text = textElement.textContent;
+        let charCount = text.length;
+
+        // Only split text if it's above a certain character count to avoid breaks in short text
+        if (charCount > 30) {
+          // Adjust 30 to whatever character count threshold you find appropriate
+          let midPoint = Math.floor(charCount / 2);
+          let spaceIndexBefore = text.lastIndexOf(" ", midPoint);
+          let spaceIndexAfter = text.indexOf(" ", midPoint);
+
+          let splitIndex;
+          if (
+            spaceIndexBefore === -1 ||
+            (spaceIndexAfter !== -1 &&
+              spaceIndexAfter - midPoint < midPoint - spaceIndexBefore)
+          ) {
+            splitIndex = spaceIndexAfter; // No space before midPoint or space after is closer to midPoint
+          } else {
+            splitIndex = spaceIndexBefore; // Space before midPoint is closer
+          }
+
+          if (splitIndex !== -1) {
+            let firstPart = text.substring(0, splitIndex);
+            let secondPart = text.substring(splitIndex + 1);
+            textElement.innerHTML = firstPart + "<br>" + secondPart; // Set the balanced text with a line break
+          }
+        }
+      }
+
+      // Apply the balanceText function to the song title element after content update
+      balanceText(document.getElementById("current_song_title"));
+      // Repeat for artist if needed
+      balanceText(document.getElementById("current_song_artist"));
+    </script>
+  </body>
+</html>
