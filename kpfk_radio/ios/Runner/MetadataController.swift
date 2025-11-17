@@ -16,27 +16,12 @@ class MetadataController {
     
     // Call this once at app startup to start forensic logging
     func startForensicMetadataLogging() {
+        // DISABLED: This timer was causing artwork to be removed from lockscreen
+        // by reapplying metadata without artwork every second
+        print("[METADATA_CONTROLLER] DISABLED - AppDelegate handles all metadata now")
         forensicLogTimer?.invalidate()
-        forensicLogTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            let session = AVAudioSession.sharedInstance()
-            print("[FORENSIC] Current MPNowPlayingInfoCenter: \(info)")
-            print("[FORENSIC] AVAudioSession: category=\(session.category), isOtherAudioPlaying=\(session.isOtherAudioPlaying)")
-            
-            // CRITICAL FIX: Check if metadata has been overridden by just_audio_background
-            if let currentTitle = info[MPMediaItemPropertyTitle] as? String,
-               let currentArtist = info[MPMediaItemPropertyArtist] as? String,
-               let lastTitle = self.lastTitle,
-               let lastArtist = self.lastArtist,
-               (currentTitle != lastTitle || currentArtist != lastArtist) {
-                print("[FORENSIC][OVERRIDE] Detected metadata override by just_audio_background!")
-                print("[FORENSIC][OVERRIDE] Expected: '\(lastTitle)' by '\(lastArtist)'")
-                print("[FORENSIC][OVERRIDE] Current: '\(currentTitle)' by '\(currentArtist)'")
-                
-                // Force reapply our metadata
-                self.reapplyLastMetadata()
-            }
-        }
+        forensicLogTimer = nil
+        // DO NOT START TIMER - it conflicts with AppDelegate
     }
 
     // Call this to stop forensic logging
@@ -47,27 +32,17 @@ class MetadataController {
     
     // CRITICAL FIX: Start a timer to periodically reapply metadata
     func startMetadataGuard() {
+        // DISABLED: This was causing conflicts with AppDelegate
+        print("[METADATA_CONTROLLER] startMetadataGuard() DISABLED - AppDelegate handles metadata")
         metadataGuardTimer?.invalidate()
-        // Only set up a guard if an override is detected (see forensic logging)
-        // The forensic logger will call reapplyLastMetadata() if an override is detected.
-        print("[GUARD] Metadata guard is now event-driven, not periodic.")
+        metadataGuardTimer = nil
     }
     
     // CRITICAL FIX: Reapply the last known metadata
     private func reapplyLastMetadata() {
-        guard let lastTitle = self.lastTitle,
-              let lastArtist = self.lastArtist else {
-            return
-        }
-        
-        print("[GUARD] Reapplying metadata: '\(lastTitle)' by '\(lastArtist)'")
-        self.updateMetadata(
-            title: lastTitle,
-            artist: lastArtist,
-            artworkUrl: self.lastArtworkUrl,
-            isPlaying: self.lastIsPlaying,
-            forceUpdate: true
-        )
+        // DISABLED: This was overriding AppDelegate's metadata and removing artwork
+        print("[METADATA_CONTROLLER] reapplyLastMetadata() DISABLED - AppDelegate handles metadata")
+        return
     }
 
     static let shared = MetadataController()
@@ -195,6 +170,11 @@ class MetadataController {
 
     /// Actually perform the lockscreen metadata update (runs on main thread)
     private func performMetadataUpdate() {
+        // DISABLED: This method was overriding AppDelegate's metadata
+        print("[METADATA_CONTROLLER] performMetadataUpdate() DISABLED - AppDelegate handles all metadata")
+        pendingMetadata = nil
+        return
+        
         guard let meta = pendingMetadata else { return }
         pendingMetadata = nil
         

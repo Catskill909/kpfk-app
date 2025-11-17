@@ -132,48 +132,94 @@ import AVFoundation
                 MPMediaItemPropertyMediaType: MPMediaType.anyAudio.rawValue
             ]
             
-            // CRITICAL FIX: Always preserve existing artwork to prevent override clearing
             let currentArtworkUrl = update["artworkUrl"] as? String
             
-            // First, get any existing artwork from the current now playing info
-            let existingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
-            let existingArtwork = existingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
-            
-            // Use cached artwork if same URL, or preserve existing artwork, or use existing from now playing
+            // CRITICAL FIX: Use cached artwork immediately if available (same URL)
             if let currentUrl = currentArtworkUrl, currentUrl == self.lastArtworkUrl, let cachedArtwork = self.cachedArtwork {
-                // Same artwork URL - use cached artwork immediately
+                // Same artwork URL - use cached artwork and set metadata immediately
                 nowPlayingInfo[MPMediaItemPropertyArtwork] = cachedArtwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
                 print("[METADATA] ✅ Using cached artwork for same URL: \(currentUrl)")
-            } else if let existingArtwork = existingArtwork {
-                // Preserve existing artwork to prevent clearing
-                nowPlayingInfo[MPMediaItemPropertyArtwork] = existingArtwork
-                print("[METADATA] ✅ Preserving existing artwork to prevent override clearing")
+                return // Early return - no download needed
             }
             
-            // Set metadata (with preserved/cached artwork)
+            // CRITICAL FIX: Set lockscreen IMMEDIATELY with text, then add artwork asynchronously
+            // This ensures lockscreen appears instantly without waiting for image download
+            let timestamp1 = Date().timeIntervalSince1970
+            print("[TIMESTAMP-\(timestamp1)] ⚡ Setting lockscreen metadata IMMEDIATELY (text-only first)")
+            print("[TIMESTAMP-\(timestamp1)] Has artwork: false")
+            print("[TIMESTAMP-\(timestamp1)] Title: \(title)")
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+            print("[TIMESTAMP-\(timestamp1)] ✅ Lockscreen set with text")
             
-            // Handle artwork download only if URL changed
+            // Verify it stuck after 100ms
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                let current = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                let hasArtwork = current?[MPMediaItemPropertyArtwork] != nil
+                print("[VERIFY-100ms] Artwork present: \(hasArtwork)")
+                if hasArtwork {
+                    print("[VERIFY-100ms] ⚠️ UNEXPECTED: Artwork appeared from somewhere!")
+                }
+            }
+            
+            // Now download and add artwork asynchronously if we have a new URL
             if let artworkUrl = currentArtworkUrl, artworkUrl != self.lastArtworkUrl {
-                print("[METADATA] New artwork URL detected: '\(artworkUrl)'")
+                print("[METADATA] 🎨 New artwork URL detected: '\(artworkUrl)'")
                 if let url = URL(string: artworkUrl) {
-                    print("[METADATA] Starting artwork download from: \(artworkUrl)")
-                    // Load artwork asynchronously with retry mechanism
-                    self.downloadArtworkWithRetry(url: url, artworkUrl: artworkUrl) { [weak self] image in
-                        guard let self = self, let image = image else { return }
+                    print("[METADATA] ⏳ Starting async artwork download...")
+                    
+                    // Download artwork with timeout (3 seconds max)
+                    self.downloadArtworkWithTimeout(url: url, artworkUrl: artworkUrl, timeout: 3.0) { [weak self] image in
+                        guard let self = self else { return }
                         
-                        print("[METADATA] ✅ Successfully loaded artwork image, size: \(image.size)")
-                        
-                        // Create and cache the artwork
-                        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                        self.cachedArtwork = artwork
-                        self.lastArtworkUrl = artworkUrl
-                        
-                        // Update the current now playing info with artwork
-                        var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                        currentInfo[MPMediaItemPropertyArtwork] = artwork
-                        MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
-                        print("[METADATA] ✅ Successfully updated MPNowPlayingInfoCenter with new artwork")
+                        // Add artwork to metadata if download succeeded
+                        if let image = image {
+                            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                            self.cachedArtwork = artwork
+                            self.lastArtworkUrl = artworkUrl
+                            
+                            // Update lockscreen with artwork
+                            let timestamp2 = Date().timeIntervalSince1970
+                            print("[TIMESTAMP-\(timestamp2)] 🎨 Adding artwork to lockscreen")
+                            print("[TIMESTAMP-\(timestamp2)] Artwork size: \(image.size)")
+                            var updatedInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? nowPlayingInfo
+                            updatedInfo[MPMediaItemPropertyArtwork] = artwork
+                            MPNowPlayingInfoCenter.default().nowPlayingInfo = updatedInfo
+                            print("[TIMESTAMP-\(timestamp2)] ✅ Artwork SET on lockscreen")
+                            
+                            // CRITICAL: Verify artwork persists
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                let current = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                                let hasArtwork = current?[MPMediaItemPropertyArtwork] != nil
+                                print("[VERIFY-100ms-AFTER-ARTWORK] Artwork still present: \(hasArtwork)")
+                                if !hasArtwork {
+                                    print("[VERIFY-100ms-AFTER-ARTWORK] ❌❌❌ ARTWORK WAS REMOVED BY SOMETHING! ❌❌❌")
+                                    print("[VERIFY-100ms-AFTER-ARTWORK] This is the bug! Something is overriding our metadata!")
+                                }
+                            }
+                            
+                            // Check again after 500ms
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                let current = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                                let hasArtwork = current?[MPMediaItemPropertyArtwork] != nil
+                                print("[VERIFY-500ms-AFTER-ARTWORK] Artwork still present: \(hasArtwork)")
+                                if !hasArtwork {
+                                    print("[VERIFY-500ms-AFTER-ARTWORK] ❌ ARTWORK REMOVED BETWEEN 100-500ms")
+                                }
+                            }
+                            
+                            // Check again after 1 second
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                let current = MPNowPlayingInfoCenter.default().nowPlayingInfo
+                                let hasArtwork = current?[MPMediaItemPropertyArtwork] != nil
+                                print("[VERIFY-1000ms-AFTER-ARTWORK] Artwork still present: \(hasArtwork)")
+                                if !hasArtwork {
+                                    print("[VERIFY-1000ms-AFTER-ARTWORK] ❌ ARTWORK REMOVED BETWEEN 500ms-1s (MetadataController timer?)")
+                                }
+                            }
+                        } else {
+                            print("[METADATA] ⚠️ Artwork download failed or timed out - lockscreen remains text-only")
+                        }
                     }
                 } else {
                     print("[METADATA] ❌ Invalid URL for artwork: '\(artworkUrl)'")
@@ -182,7 +228,33 @@ import AVFoundation
                 // Clear cached artwork if no URL provided
                 self.cachedArtwork = nil
                 self.lastArtworkUrl = nil
-                print("[METADATA] ⚠️ No artwork URL provided - cleared cache")
+                print("[METADATA] ℹ️ No artwork URL provided - lockscreen is text-only")
+            }
+        }
+    }
+    
+    /// Downloads artwork with timeout to prevent indefinite waiting
+    /// This ensures lockscreen updates within a reasonable time even if download fails
+    private func downloadArtworkWithTimeout(url: URL, artworkUrl: String, timeout: TimeInterval = 3.0, completion: @escaping (UIImage?) -> Void) {
+        var hasCompleted = false
+        
+        // Set up timeout timer
+        let timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { _ in
+            if !hasCompleted {
+                hasCompleted = true
+                print("[METADATA] ⏱️ Artwork download timeout (\(timeout)s) - proceeding without image")
+                completion(nil)
+            }
+        }
+        
+        // Start download with retry
+        downloadArtworkWithRetry(url: url, artworkUrl: artworkUrl, maxRetries: 2) { image in
+            // Cancel timeout if download completes first
+            timeoutTimer.invalidate()
+            
+            if !hasCompleted {
+                hasCompleted = true
+                completion(image)
             }
         }
     }
@@ -456,39 +528,52 @@ import AVFoundation
             nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = Double(duration) / 1000.0
         }
         
-        // CRITICAL FIX: Always preserve existing artwork to prevent clearing
-        let existingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        let existingArtwork = existingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
-        if let existingArtwork = existingArtwork {
-            nowPlayingInfo[MPMediaItemPropertyArtwork] = existingArtwork
-            print("[NOW_PLAYING] ✅ Preserving existing artwork to prevent clearing")
+        // CRITICAL FIX: Use cached artwork immediately if available (same URL)
+        if let artworkUrlString = artworkUrl, artworkUrlString == self.lastArtworkUrl, let cachedArtwork = self.cachedArtwork {
+            // Same artwork URL - use cached artwork and set metadata immediately
+            nowPlayingInfo[MPMediaItemPropertyArtwork] = cachedArtwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+            print("[NOW_PLAYING] ✅ Using cached artwork for same URL: \(artworkUrlString)")
+            result(true)
+            return // Early return - no download needed
         }
         
-        // Set metadata (with preserved artwork if available)
+        // CRITICAL FIX: Set lockscreen IMMEDIATELY with text, then add artwork asynchronously
+        print("[NOW_PLAYING] ⚡ Setting lockscreen metadata IMMEDIATELY (text-only first)")
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-        print("[NOW_PLAYING] Set metadata with preserved artwork")
-        
-        // Handle artwork asynchronously if provided
-        if let artworkUrlString = artworkUrl, !artworkUrlString.isEmpty, let url = URL(string: artworkUrlString) {
-            print("[NOW_PLAYING] Loading artwork from: \(artworkUrlString)")
-            
-            self.downloadArtworkWithRetry(url: url, artworkUrl: artworkUrlString) { image in
-                guard let image = image else {
-                    print("[NOW_PLAYING] ⚠️ Failed to load artwork after all retry attempts")
-                    return
-                }
-                
-                // Create artwork and update metadata
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-                print("[NOW_PLAYING] ✅ Successfully updated metadata with artwork")
-            }
-        } else {
-            print("[NOW_PLAYING] No artwork URL provided or empty")
-        }
-        
+        print("[NOW_PLAYING] ✅ Lockscreen set with text - artwork will be added asynchronously if available")
         result(true)
+        
+        // Now download and add artwork asynchronously if we have a new URL
+        if let artworkUrlString = artworkUrl, !artworkUrlString.isEmpty, artworkUrlString != self.lastArtworkUrl, let url = URL(string: artworkUrlString) {
+            print("[NOW_PLAYING] 🎨 New artwork URL detected: '\(artworkUrlString)'")
+            print("[NOW_PLAYING] ⏳ Starting async artwork download...")
+            
+            // Download artwork with timeout (3 seconds max)
+            self.downloadArtworkWithTimeout(url: url, artworkUrl: artworkUrlString, timeout: 3.0) { [weak self] image in
+                guard let self = self else { return }
+                
+                // Add artwork to metadata if download succeeded
+                if let image = image {
+                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                    self.cachedArtwork = artwork
+                    self.lastArtworkUrl = artworkUrlString
+                    
+                    // Update lockscreen with artwork
+                    var updatedInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? nowPlayingInfo
+                    updatedInfo[MPMediaItemPropertyArtwork] = artwork
+                    MPNowPlayingInfoCenter.default().nowPlayingInfo = updatedInfo
+                    print("[NOW_PLAYING] ✅ Artwork downloaded and added to lockscreen, size: \(image.size)")
+                } else {
+                    print("[NOW_PLAYING] ⚠️ Artwork download failed or timed out - lockscreen remains text-only")
+                }
+            }
+        } else if artworkUrl == nil || artworkUrl?.isEmpty == true {
+            // Clear cached artwork if no URL provided
+            self.cachedArtwork = nil
+            self.lastArtworkUrl = nil
+            print("[NOW_PLAYING] ℹ️ No artwork URL provided - lockscreen is text-only")
+        }
     }
     
     /// Handle clearNowPlaying method from IOSLockscreenService
