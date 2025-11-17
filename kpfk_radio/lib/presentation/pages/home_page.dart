@@ -695,7 +695,7 @@ class _HomePageState extends State<HomePage> {
         return const FractionallySizedBox(
           heightFactor: 0.9,
           child: DonateWebViewSheet(
-            initialUrl: 'https://docs.pacifica.org/wpfw/donate/',
+            initialUrl: 'https://docs.pacifica.org/kpfk/donate/',
           ),
         );
       },
