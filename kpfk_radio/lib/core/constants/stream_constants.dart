@@ -31,19 +31,21 @@ class StreamConstants {
   static const String scheduleUrl = 'https://www.kpfk.org/schedule/';
   static const String playlistUrl = 'https://www.kpfk.org/playlist/';
   static const String showArchiveUrl = 'https://archive.kpfk.org/?mob=1';
-  static const String donateUrl = 'https://kpfk.org/donate/';
-  static const String aboutUrl = 'https://kpfk.org/';
+  static const String donateUrl =
+      'https://docs.pacifica.org/kpfk/kpfk-privacy.php';
+  static const String aboutUrl =
+      'https://docs.pacifica.org/kpfk/kpfk-privacy.php';
   static const String pacificaUrl =
       'https://pacificanetwork.org/about-pacifica-foundation/pacifica-foundation/';
   static const String privacyPolicyUrl =
       'https://docs.pacifica.org/kpfk/kpfk-privacy.php';
 
   // Social Media URLs
-  static const String facebookUrl = 'https://www.facebook.com/kpfkradio/';
-  static const String twitterUrl = 'https://x.com/kpfk_fm';
-  static const String instagramUrl = 'https://www.instagram.com/kpfk_fm/';
-  static const String youtubeUrl = 'https://www.youtube.com/user/kpfkradio';
-  static const String emailAddress = 'contact@kpfk.org';
+  static const String facebookUrl = 'https://www.facebook.com/KPFK90.7/';
+  static const String twitterUrl = 'https://x.com/KPFK/';
+  static const String instagramUrl = 'https://www.instagram.com/kpfk/';
+  static const String youtubeUrl = 'https://www.youtube.com/@KPFKTV/videos/';
+  static const String emailAddress = 'gm@kpfk.org';
 
   // Error Messages
   static const String connectionError =
