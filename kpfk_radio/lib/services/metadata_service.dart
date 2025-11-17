@@ -4,8 +4,10 @@ import '../core/services/logger_service.dart';
 import '../domain/models/stream_metadata.dart';
 
 class MetadataService {
-  static const String _apiUrl = 'https://confessor.wpfwfm.org/playlist/_pl_current_ary.php';
-  static const Duration _refreshInterval = Duration(seconds: 15); // More frequent updates
+  static const String _apiUrl =
+      'https://confessor.kpfk.org/playlist/_pl_current_ary.php';
+  static const Duration _refreshInterval =
+      Duration(seconds: 15); // More frequent updates
   static const Duration _timeout = Duration(seconds: 5);
 
   final Dio _dio;
@@ -14,14 +16,15 @@ class MetadataService {
   StreamMetadata? _lastMetadata;
 
   MetadataService() : _dio = Dio() {
-    LoggerService.info('🎵 MetadataService: Initializing with simplified fetch strategy');
+    LoggerService.info(
+        '🎵 MetadataService: Initializing with simplified fetch strategy');
     _dio.options.connectTimeout = _timeout;
     _dio.options.receiveTimeout = _timeout;
     _dio.options.headers = {
       'Accept': 'application/json',
     };
     _dio.options.responseType = ResponseType.plain; // Get raw response
-    
+
     // CRITICAL FIX: Single initial fetch, no aggressive retries or duplicates
     LoggerService.info('🎵 MetadataService: Starting initial fetch');
     _fetchMetadata();
@@ -51,7 +54,8 @@ class MetadataService {
     LoggerService.info('🎵 MetadataService: Manual metadata fetch requested');
     try {
       final metadata = await _fetchFromApi();
-      LoggerService.info('🎵 MetadataService: Manual fetch SUCCESS - Show: ${metadata.current.showName}');
+      LoggerService.info(
+          '🎵 MetadataService: Manual fetch SUCCESS - Show: ${metadata.current.showName}');
       _updateMetadata(metadata);
       return metadata;
     } catch (e) {
@@ -59,18 +63,20 @@ class MetadataService {
       return _lastMetadata;
     }
   }
-  
+
   Future<void> _fetchMetadata() async {
     try {
       final metadata = await _fetchFromApi();
-      LoggerService.info('🎵 Periodic fetch SUCCESS: Show="${metadata.current.showName}", Host="${metadata.current.host}"');
+      LoggerService.info(
+          '🎵 Periodic fetch SUCCESS: Show="${metadata.current.showName}", Host="${metadata.current.host}"');
       _updateMetadata(metadata);
     } catch (e, stackTrace) {
       LoggerService.metadataError('Error fetching metadata', e);
       LoggerService.debug('Stack trace: $stackTrace');
       // If we have last metadata, keep using it
       if (_lastMetadata != null) {
-        LoggerService.debug('Using cached metadata: ${_lastMetadata.toString()}');
+        LoggerService.debug(
+            'Using cached metadata: ${_lastMetadata.toString()}');
         _metadataController.add(_lastMetadata!);
       }
     }
@@ -88,7 +94,8 @@ class MetadataService {
         LoggerService.debug('Raw API response: $data');
         try {
           final metadata = StreamMetadata.fromJson(data);
-          LoggerService.debug('Successfully parsed metadata: ${metadata.toString()}');
+          LoggerService.debug(
+              'Successfully parsed metadata: ${metadata.toString()}');
           return metadata;
         } catch (parseError, stackTrace) {
           LoggerService.metadataError('Failed to parse metadata', parseError);
@@ -109,11 +116,13 @@ class MetadataService {
 
   void _updateMetadata(StreamMetadata metadata) {
     LoggerService.info('🎵 MetadataService: Pushing metadata update to stream');
-    LoggerService.info('🎵 SHOW: "${metadata.current.showName}", HOST: "${metadata.current.host}"');
+    LoggerService.info(
+        '🎵 SHOW: "${metadata.current.showName}", HOST: "${metadata.current.host}"');
     if (metadata.current.hasSongInfo) {
-      LoggerService.info('🎵 SONG: "${metadata.current.songTitle}", ARTIST: "${metadata.current.songArtist}"');
+      LoggerService.info(
+          '🎵 SONG: "${metadata.current.songTitle}", ARTIST: "${metadata.current.songArtist}"');
     }
-    
+
     _lastMetadata = metadata;
     _metadataController.add(metadata);
   }

@@ -10,7 +10,7 @@ ini_set('error_log', '/path/to/your/error.log'); // Specify the path to your err
 // To switch between HD1 and HD2 metadata, use one of these URLs:
 // HD1: https://confessor.kpft.org/playlist/_pl_current_ary.php
 // HD2: https://hd3.kpft.org/playlist/_pl_current_ary.php
-$kpftApiUrl = 'https://confessor.wpfwfm.org/playlist/_pl_current_ary.php';
+$kpftApiUrl = 'https://confessor.kpfk.org/playlist/_pl_current_ary.php';
 
 // Use cURL to make the API request
 $ch = curl_init();
