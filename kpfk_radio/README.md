@@ -1,8 +1,8 @@
-# WPFW Radio Streaming App
+# KPFK Radio Streaming App
 
-A Flutter-based radio streaming application for WPFW with advanced WebView integration and background audio playback.
+A Flutter-based radio streaming application for KPFK 90.7 FM with advanced features including background audio playback, lockscreen controls, sleep timer, and accessibility support.
 
-## Current Version: v1.0.0+2 (April 18, 2025)
+## Current Version: v1.0.0+2
 
 ### Recent Updates
 - Added custom typography using Google Fonts (Oswald & Poppins)
@@ -15,7 +15,7 @@ A Flutter-based radio streaming application for WPFW with advanced WebView integ
   - Resolved stuck loading states when using lockscreen controls
   - Implemented proper audio command routing through StreamRepository singleton
   - Perfect synchronization between lockscreen, app controls, and system audio interfaces
-- Ready for TestFlight distribution with complete audio functionality
+- Ready for distribution with complete audio functionality
 
 ### Previous Updates (Sep 5, 2025)
 - Basic accessibility support implemented (non-visual changes only):
@@ -23,7 +23,7 @@ A Flutter-based radio streaming application for WPFW with advanced WebView integ
   - Live announcements for playback transitions (Loading, Buffering, Playing, Paused) and error states.
   - Loading spinner marked as a live region so "Loading audio" is read without moving focus.
   - Donate sheet: labeled close button, announce page loaded, and announce before opening external browser.
-- For details and next steps, see: [accessibity.md](../accessibity.md)
+- For details and next steps, see project documentation
 
 ## Features
 
@@ -70,9 +70,8 @@ A Flutter-based radio streaming application for WPFW with advanced WebView integ
 
 ### Resolved: iOS Lockscreen Metadata
 - Resolved: Stable lockscreen metadata and working remote controls on iOS.
-- Fix summary: Implemented native `MPNowPlayingInfoCenter` updates via platform channel, debounced updates to avoid churn, and wired `MPRemoteCommandCenter` handlers to Flutter (play/pause/toggle) so taps control the `WPFWAudioHandler`.
+- Fix summary: Implemented native `MPNowPlayingInfoCenter` updates via platform channel, debounced updates to avoid churn, and wired `MPRemoteCommandCenter` handlers to Flutter (play/pause/toggle) so taps control the `KPFKAudioHandler`.
 - Verification: VoiceOver reads current show/song on lockscreen; controls operate playback reliably without flicker.
-- Documentation: [Comprehensive history and approach](docs/iOS_LOCKSCREEN_COMPREHENSIVE.md), [Fix approach](docs/LOCKSCREEN_METADATA_FIX_APPROACH.md), and [Master notes](docs/iOS_LOCKSCREEN_METADATA_MASTER.md)
 
 ---
 
@@ -89,9 +88,9 @@ A Flutter-based radio streaming application for WPFW with advanced WebView integ
 High-level flow:
 - `HomePage` (`lib/presentation/pages/home_page.dart`) renders the main experience: station artwork, metadata, and a single large play/pause control that dispatches events to `StreamBloc`.
 - `StreamBloc` (`lib/presentation/bloc/stream_bloc.dart`) orchestrates playback via `StreamRepository` (`lib/data/repositories/stream_repository.dart`).
-- `WPFWAudioHandler` (`lib/services/audio_service/wpfw_audio_handler.dart`) wraps `just_audio` and integrates with `audio_service` for background/notification control.
-- Metadata services (`lib/services/metadata_service*.dart`) fetch and adapt current/next show info and song data to the UI and, eventually, the iOS lockscreen.
-- Platform integration for iOS lockscreen is under active development using native `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` via platform channels (see docs below).
+- `KPFKAudioHandler` (`lib/services/audio_service/kpfk_audio_handler.dart`) wraps `just_audio` and integrates with `audio_service` for background/notification control.
+- Metadata services (`lib/services/metadata_service*.dart`) fetch and adapt current/next show info and song data to the UI and iOS lockscreen.
+- Platform integration for iOS lockscreen uses native `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` via platform channels.
 
 ## Project Structure
 
@@ -102,7 +101,7 @@ High-level flow:
 - `lib/presentation/bloc/`
   - `stream_bloc.dart`, `sleep_timer_cubit.dart`, `connectivity_cubit.dart`, `pacifica_bloc.dart`
 - `lib/services/`
-  - `audio_service/wpfw_audio_handler.dart`
+  - `audio_service/kpfk_audio_handler.dart`
   - `metadata_service.dart`, `metadata_service_native.dart`, `metadata/lockscreen_service.dart`, `ios_lockscreen_service.dart`
 - `lib/data/`
   - `repositories/` (stream, pacifica, affiliate)
@@ -152,7 +151,7 @@ flutter build ios   # iOS (requires Xcode signing)
 ## Usage
 
 - Open the app to the main `HomePage`.
-- Tap the large play/pause button to start/stop the WPFW stream.
+- Tap the large play/pause button to start/stop the KPFK stream.
 - Bottom-right Alarm button opens the Sleep Timer overlay.
 - Bottom-left Donate button opens the in-app Donate modal WebView; external links open in the system browser.
 - Tap the top-right icon to open the Pacifica Apps & Services grid.
@@ -164,18 +163,13 @@ Basic screen reader support (Sep 5, 2025):
 - Announcements for playback transitions (Loading, Buffering, Playing, Paused) and errors.
 - Donate modal: labeled close button; announcements for page load and external browser opening.
 
-Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for metadata blocks, contrast/tap-target audits, and dev-only a11y tooling. See: [accessibity.md](../accessibity.md).
+Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for metadata blocks, contrast/tap-target audits, and dev-only a11y tooling.
 
 ## Platform specifics: iOS lockscreen metadata
 
-- Background: iOS lockscreen metadata currently exhibits refresh/flicker and "Not Playing" alternation in some states.
-- Approach: Implement native `MPNowPlayingInfoCenter` updates and `MPRemoteCommandCenter` handlers via platform channels from Flutter to Swift.
-- Status: Documented; platform channel and native integration in progress.
-- Docs:
-  - `docs/iOS_LOCKSCREEN_METADATA_MASTER.md`
-  - `docs/LOCKSCREEN_METADATA_FIX_APPROACH.md`
-  - `docs/archive/iOS_LOCKSCREEN_COMPREHENSIVE.md`
-  - Related issue notes: `docs/ANDROID_LOCKSCREEN_CONTROLS_ISSUE.md`
+- Status: ✅ Fully functional
+- Implementation: Native `MPNowPlayingInfoCenter` updates and `MPRemoteCommandCenter` handlers via platform channels from Flutter to Swift.
+- Features: Stable metadata display, responsive controls, proper synchronization with app state
 
 ## Troubleshooting
 
@@ -193,8 +187,29 @@ Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for met
 
 ## Roadmap / Backlog
 
-- Finalize iOS lockscreen native channel for stable metadata and working remote commands.
 - Add focus management and semantics grouping for overlays/modals.
 - Introduce CI a11y checks (e.g., `accessibility_lint`) and basic widget tests for semantics.
 - Improve contrast and typography in dark theme as needed (AA level).
-- Explore replacing/augmenting playback with `radio_player` or a native iOS `AVPlayer` integration if warranted by lockscreen constraints.
+- Explore additional playback optimizations and features.
+
+## Station Information
+
+- **Station**: KPFK 90.7 FM
+- **Network**: Pacifica Radio
+- **Website**: https://www.kpfk.org
+- **Stream URL**: https://docs.pacifica.org/kpfk/kpfk.m3u
+- **Email**: gm@kpfk.org
+
+### Social Media
+- **Facebook**: https://www.facebook.com/KPFK90.7/
+- **Twitter/X**: https://x.com/KPFK/
+- **Instagram**: https://www.instagram.com/kpfk/
+- **YouTube**: https://www.youtube.com/@KPFKTV/videos/
+
+## Configuration Files
+
+Key configuration files:
+- `lib/core/constants/stream_constants.dart` - Stream URLs, station info, social media links
+- `pubspec.yaml` - Dependencies and app metadata
+- `android/app/build.gradle` - Android build configuration
+- `ios/Runner.xcodeproj/project.pbxproj` - iOS build configuration
