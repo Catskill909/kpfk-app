@@ -1,10 +1,11 @@
 class StreamConstants {
-  // Direct Icecast stream endpoint
-  static const String streamUrl = 'https://streams.pacifica.org:9000/kpfk_128';
+  // M3U playlist URL - resolves to direct Icecast stream endpoint
+  static const String streamUrl = 'https://docs.pacifica.org/kpfk/kpfk.m3u';
 
-  // Legacy baseUrl kept for reference (no longer used for streaming)
-  static const String baseUrl = 'https://streams.pacifica.org:9000';
-  static const String legacyStreamUrl = '$baseUrl/kpfk_128';
+  // Legacy URLs kept for reference (no longer used for streaming)
+  static const String legacyBaseUrl = 'https://streams.pacifica.org:9000';
+  static const String legacyStreamUrl =
+      'https://streams.pacifica.org:9000/kpfk_128';
 
   static const String metadataUrl = 'http://localhost:8000/proxy.php';
   static const String proxyUrl = 'http://localhost:8000/proxy.php';

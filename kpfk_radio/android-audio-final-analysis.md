@@ -70,9 +70,9 @@ player.playing=false, player.state=ProcessingState.ready, pb.playing=false, pb.s
 ## 🎵 **AUDIO QUALITY & RELIABILITY**
 
 ### **Stream Quality**
-- **Source**: `https://streams.pacifica.org:9000/wpfw_128` (128kbps)
+- **Source**: M3U playlist URL (`https://docs.pacifica.org/kpfk/kpfk.m3u`)
+- **Resolution**: Expert M3U parser extracts direct stream URL (128kbps)
 - **Protocol**: HTTPS (secure, no cleartext issues)
-- **Parsing**: Expert M3U resolution to direct stream
 - **Compatibility**: Works across all Android versions
 
 ### **Error Handling**
