@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,6 +9,7 @@ import '../theme/font_constants.dart';
 import 'pacifica_apps_page.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/audio_server_error_modal.dart';
+import '../widgets/show_info_modal.dart';
 import '../bloc/connectivity_cubit.dart';
 import '../widgets/donate_webview_sheet.dart';
 import '../widgets/sleep_timer_overlay.dart';
@@ -25,6 +27,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool _showLocalLoading = false;
   bool _userPressedPause = false; // Track when user pressed pause button
+  bool _showInfoModal = false; // Track info modal visibility
 
   // PHASE 1: Spinner timeout safety mechanism
   Timer? _spinnerTimeoutTimer;
@@ -285,67 +288,123 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Station Logo
-                              Container(
-                                width: MediaQuery.of(context).size.width *
-                                    (_isSmallPhone(context)
-                                        ? 0.8
-                                        : (MediaQuery.of(context)
+                              // Station Logo with Info Icon
+                              Stack(
+                                children: [
+                                  // Station Logo
+                                  Container(
+                                    width: MediaQuery.of(context).size.width *
+                                        (_isSmallPhone(context)
+                                            ? 0.8
+                                            : (MediaQuery.of(context)
+                                                        .size
+                                                        .shortestSide >
+                                                    600
+                                                ? 0.7
+                                                : 0.85)),
+                                    height: MediaQuery.of(context).size.width *
+                                        (_isSmallPhone(context)
+                                            ? 0.8
+                                            : (MediaQuery.of(context)
+                                                        .size
+                                                        .shortestSide >
+                                                    600
+                                                ? 0.7
+                                                : 0.85)),
+                                    margin: EdgeInsets.only(
+                                        top: _isSmallPhone(context) ? 12 : 20),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: const Color(
+                                            0x1AFFFFFF), // ~10% white
+                                        width: MediaQuery.of(context)
                                                     .size
                                                     .shortestSide >
                                                 600
-                                            ? 0.7
-                                            : 0.85)),
-                                height: MediaQuery.of(context).size.width *
-                                    (_isSmallPhone(context)
-                                        ? 0.8
-                                        : (MediaQuery.of(context)
-                                                    .size
-                                                    .shortestSide >
-                                                600
-                                            ? 0.7
-                                            : 0.85)),
-                                margin: EdgeInsets.only(
-                                    top: _isSmallPhone(context) ? 12 : 20),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color:
-                                        const Color(0x1AFFFFFF), // ~10% white
-                                    width: MediaQuery.of(context)
-                                                .size
-                                                .shortestSide >
-                                            600
-                                        ? 1
-                                        : 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                          red: 0,
-                                          green: 0,
-                                          blue: 0,
-                                          alpha: 77), // ~0.3 opacity
-                                      blurRadius: 8,
-                                      offset: const Offset(2, 2),
+                                            ? 1
+                                            : 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                              red: 0,
+                                              green: 0,
+                                              blue: 0,
+                                              alpha: 77), // ~0.3 opacity
+                                          blurRadius: 8,
+                                          offset: const Offset(2, 2),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: state.metadata?.current.hasHostImage ==
-                                          true
-                                      ? Image.network(
-                                          state.metadata!.current.hostImage!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: state.metadata?.current
+                                                  .hasHostImage ==
+                                              true
+                                          ? Image.network(
+                                              state
+                                                  .metadata!.current.hostImage!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error,
+                                                      stackTrace) =>
                                                   _buildLoadingContainer(
                                                       'Error loading image'),
-                                        )
-                                      : _buildLoadingContainer(
-                                          'Loading stream information...'),
-                                ),
+                                            )
+                                          : _buildLoadingContainer(
+                                              'Loading stream information...'),
+                                    ),
+                                  ),
+                                  // Info icon overlay with frosted glass effect
+                                  if (state.metadata != null)
+                                    Positioned(
+                                      bottom: _isSmallPhone(context) ? 6 : 8,
+                                      right: _isSmallPhone(context) ? 6 : 8,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _showInfoModal = true;
+                                          });
+                                        },
+                                        child: ClipOval(
+                                          child: BackdropFilter(
+                                            filter: ImageFilter.blur(
+                                              sigmaX: 10,
+                                              sigmaY: 10,
+                                            ),
+                                            child: Container(
+                                              width: _isSmallPhone(context)
+                                                  ? 40
+                                                  : 44,
+                                              height: _isSmallPhone(context)
+                                                  ? 40
+                                                  : 44,
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.65),
+                                                shape: BoxShape.circle,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withValues(alpha: 0.5),
+                                                    blurRadius: 8,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Icon(
+                                                Icons.info,
+                                                color: Colors.white,
+                                                size: _isSmallPhone(context)
+                                                    ? 28
+                                                    : 32,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                               // Show Information
                               if (state.metadata != null) ...[
@@ -673,6 +732,19 @@ class _HomePageState extends State<HomePage> {
                       context.read<StreamBloc>().add(ClearServerError());
                     },
                     customMessage: state.errorMessage,
+                  ),
+
+                // Show Info Modal
+                if (_showInfoModal && state.metadata != null)
+                  ShowInfoModal(
+                    showName: state.metadata!.current.showName,
+                    host: state.metadata!.current.host,
+                    description: state.metadata!.current.description,
+                    onClose: () {
+                      setState(() {
+                        _showInfoModal = false;
+                      });
+                    },
                   ),
               ],
             );

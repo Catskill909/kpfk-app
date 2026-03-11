@@ -9,6 +9,7 @@ class ShowInfo extends Equatable {
   final String? songTitle;
   final String? songArtist;
   final String? hostImage;
+  final String? description;
 
   const ShowInfo({
     required this.showName,
@@ -17,6 +18,7 @@ class ShowInfo extends Equatable {
     this.songTitle,
     this.songArtist,
     this.hostImage,
+    this.description,
   });
 
   factory ShowInfo.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,9 @@ class ShowInfo extends Equatable {
           ? StringUtils.decodeHtmlEntities(json['pl_artist'])
           : null,
       hostImage: imageUrl,
+      description: json['sh_desc'] != null
+          ? StringUtils.decodeHtmlEntities(json['sh_desc'])
+          : null,
     );
   }
 
@@ -57,7 +62,7 @@ class ShowInfo extends Equatable {
 
   @override
   List<Object?> get props =>
-      [showName, host, time, songTitle, songArtist, hostImage];
+      [showName, host, time, songTitle, songArtist, hostImage, description];
 
   @override
   String toString() {
