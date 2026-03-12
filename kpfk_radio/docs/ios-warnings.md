@@ -1,6 +1,6 @@
 # iOS Build Warnings — Deep Audit & Fix Plan
 
-> Generated: 2025-03-12 | **Last updated: 2025-03-12 1:00 PM**
+> Generated: 2025-03-12 | **Last updated: 2025-03-12 1:10 PM**
 > Project: KPFK Radio iOS (Flutter)
 > Xcode deployment target: **iOS 13.0** (project & Podfile aligned)
 
@@ -12,7 +12,7 @@
 |-------|-------------|--------|
 | **Phase 1** | Easy wins — our code | ✅ **DONE** (committed `028de24`) |
 | **Phase 2** | Deployment target alignment | ✅ **DONE** (committed `d9be03d`) |
-| **Phase 3A** | Suppress linker warning + Pods recommended settings | ✅ **DONE** (linker flag in Podfile; Pods settings = Xcode manual step) |
+| **Phase 3A** | Suppress linker warning + Pods recommended settings | ✅ **DONE** (linker flag in Podfile + project.pbxproj; Pods settings = Xcode manual step) |
 | **Phase 3B** | Upgrade `url_launcher` and `flutter_native_splash` | ✅ **DONE** (`flutter_native_splash` upgraded to 2.4.7; `url_launcher_ios` 6.4.x needs newer Flutter SDK — unfixable) |
 | **Phase 3C** | Upgrade `flutter_inappwebview` | 🔲 Pending (risky — beta) |
 | **Unfixable** | `audio_service` deprecated API | ❌ Awaiting upstream author |
@@ -199,3 +199,50 @@ This hides the warnings but does not fix the underlying code.
 
 ### Unfixable — Accept
 - `audio_service` — No newer version available. Warning is cosmetic only.
+
+---
+
+## Phase 4 — Flutter SDK Upgrade (3.35.5 → 3.41.2)
+
+**Current:** Flutter 3.35.5 / Dart 3.9.2 (Sep 2025)
+**Latest stable:** Flutter 3.41.2 / Dart 3.10+ (Feb 2026)
+
+### Why upgrade?
+- `url_launcher_ios` 6.4.x (fixes `keyWindow` deprecation) requires Flutter 3.38+/Dart 3.10+
+- Flutter 3.38 adopted **UISceneDelegate** — the same iOS architecture change that replaces `keyWindow`
+- 6 months of bug fixes, performance improvements, and security patches
+
+### Breaking changes to review (3.35 → 3.41)
+
+**Flutter 3.38 (must pass through):**
+- **UISceneDelegate adoption** — directly relevant to our iOS warnings; Flutter's own iOS embedding moves to scenes
+- FontWeight now controls variable font weight attribute
+- Material 3 tokens update — may affect theming/colors slightly
+- SnackBar with action no longer auto-dismisses
+- Default Android page transition changed to PredictiveBackPageTransitionBuilder
+- Deprecations: `containsSemantics`, `findChildIndexCallback`, `OverlayPortal.targetsRootOverlay`
+
+**Flutter 3.41 (latest stable):**
+- **Android Gradle Plugin 9.0.0 migration required** — biggest risk item
+- ListTile throws exception when wrapped in a colored widget (could affect our UI)
+- Page transition builders reorganized
+- Deprecations: `onReorder`, `cacheExtent`, `TextInputConnection.setStyle`
+
+### Risk assessment
+
+| Risk | Level | Notes |
+|------|-------|-------|
+| AGP 9.0.0 migration | ⚠️ Medium | Android build config changes needed |
+| UISceneDelegate | Low | Flutter handles this internally |
+| Material 3 tokens | Low | Minor color/theme adjustments if any |
+| `flutter_inappwebview` beta | ⚠️ Medium | Beta plugin may not support new Flutter APIs |
+| ListTile color change | Low | Check if we wrap ListTiles in colored widgets |
+| Page transitions | Low | Default change only affects Android |
+
+### Recommendation
+- **Do it on a branch** — `flutter-upgrade`
+- Upgrade incrementally: 3.35 → 3.38 first, build + test, then → 3.41
+- Or just go straight to 3.41 (Flutter handles migrations)
+- Run `dart fix --apply` after upgrade to auto-migrate deprecated APIs
+- Biggest risk: `flutter_inappwebview` beta + AGP 9.0 migration
+- Expected payoff: fixes `url_launcher_ios` keyWindow warning, possibly others
