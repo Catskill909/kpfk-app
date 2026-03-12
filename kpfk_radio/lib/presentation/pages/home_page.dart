@@ -288,123 +288,77 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Station Logo with Info Icon
-                              Stack(
-                                children: [
-                                  // Station Logo
-                                  Container(
-                                    width: MediaQuery.of(context).size.width *
-                                        (_isSmallPhone(context)
-                                            ? 0.8
-                                            : (MediaQuery.of(context)
-                                                        .size
-                                                        .shortestSide >
-                                                    600
-                                                ? 0.7
-                                                : 0.85)),
-                                    height: MediaQuery.of(context).size.width *
-                                        (_isSmallPhone(context)
-                                            ? 0.8
-                                            : (MediaQuery.of(context)
-                                                        .size
-                                                        .shortestSide >
-                                                    600
-                                                ? 0.7
-                                                : 0.85)),
-                                    margin: EdgeInsets.only(
-                                        top: _isSmallPhone(context) ? 12 : 20),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: const Color(
-                                            0x1AFFFFFF), // ~10% white
-                                        width: MediaQuery.of(context)
-                                                    .size
-                                                    .shortestSide >
-                                                600
-                                            ? 1
-                                            : 2,
+                              // Station Logo - tap to show info
+                              GestureDetector(
+                                onTap: state.metadata != null
+                                    ? () {
+                                        setState(() {
+                                          _showInfoModal = true;
+                                        });
+                                      }
+                                    : null,
+                                child: Container(
+                                  width: MediaQuery.of(context).size.width *
+                                      (_isSmallPhone(context)
+                                          ? 0.8
+                                          : (MediaQuery.of(context)
+                                                      .size
+                                                      .shortestSide >
+                                                  600
+                                              ? 0.7
+                                              : 0.85)),
+                                  height: MediaQuery.of(context).size.width *
+                                      (_isSmallPhone(context)
+                                          ? 0.8
+                                          : (MediaQuery.of(context)
+                                                      .size
+                                                      .shortestSide >
+                                                  600
+                                              ? 0.7
+                                              : 0.85)),
+                                  margin: EdgeInsets.only(
+                                      top: _isSmallPhone(context) ? 12 : 20),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color:
+                                          const Color(0x1AFFFFFF), // ~10% white
+                                      width: MediaQuery.of(context)
+                                                  .size
+                                                  .shortestSide >
+                                              600
+                                          ? 1
+                                          : 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                            red: 0,
+                                            green: 0,
+                                            blue: 0,
+                                            alpha: 77), // ~0.3 opacity
+                                        blurRadius: 8,
+                                        offset: const Offset(2, 2),
                                       ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                              red: 0,
-                                              green: 0,
-                                              blue: 0,
-                                              alpha: 77), // ~0.3 opacity
-                                          blurRadius: 8,
-                                          offset: const Offset(2, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(20),
-                                      child: state.metadata?.current
-                                                  .hasHostImage ==
-                                              true
-                                          ? Image.network(
-                                              state
-                                                  .metadata!.current.hostImage!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error,
-                                                      stackTrace) =>
-                                                  _buildLoadingContainer(
-                                                      'Error loading image'),
-                                            )
-                                          : _buildLoadingContainer(
-                                              'Loading stream information...'),
-                                    ),
+                                    ],
                                   ),
-                                  // Info icon overlay with frosted glass effect
-                                  if (state.metadata != null)
-                                    Positioned(
-                                      bottom: _isSmallPhone(context) ? 6 : 8,
-                                      right: _isSmallPhone(context) ? 6 : 8,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _showInfoModal = true;
-                                          });
-                                        },
-                                        child: ClipOval(
-                                          child: BackdropFilter(
-                                            filter: ImageFilter.blur(
-                                              sigmaX: 10,
-                                              sigmaY: 10,
-                                            ),
-                                            child: Container(
-                                              width: _isSmallPhone(context)
-                                                  ? 40
-                                                  : 44,
-                                              height: _isSmallPhone(context)
-                                                  ? 40
-                                                  : 44,
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withValues(alpha: 0.65),
-                                                shape: BoxShape.circle,
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withValues(alpha: 0.5),
-                                                    blurRadius: 8,
-                                                    spreadRadius: 1,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Icon(
-                                                Icons.info,
-                                                color: Colors.white,
-                                                size: _isSmallPhone(context)
-                                                    ? 28
-                                                    : 32,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: state.metadata?.current
+                                                .hasHostImage ==
+                                            true
+                                        ? Image.network(
+                                            state.metadata!.current.hostImage!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    _buildLoadingContainer(
+                                                        'Error loading image'),
+                                          )
+                                        : _buildLoadingContainer(
+                                            'Loading stream information...'),
+                                  ),
+                                ),
                               ),
                               // Show Information
                               if (state.metadata != null) ...[
@@ -467,20 +421,65 @@ class _HomePageState extends State<HomePage> {
                           alignment: Alignment.center,
                           margin: EdgeInsets.symmetric(
                               vertical: _isSmallPhone(context) ? 24.0 : 32.0),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Semantics(
-                                button: true,
-                                enabled: true,
-                                label:
-                                    state.playbackState == StreamState.playing
-                                        ? 'Stop stream and reset'
-                                        : 'Play stream',
-                                hint:
-                                    'Double tap to ${state.playbackState == StreamState.playing ? 'stop and reset' : 'play'}',
-                                child: IconButton(
-                                  iconSize: _isSmallPhone(context)
+                          child: Semantics(
+                            button: true,
+                            enabled: true,
+                            label: _showLocalLoading
+                                ? 'Loading audio'
+                                : (state.playbackState == StreamState.playing
+                                    ? 'Stop stream and reset'
+                                    : 'Play stream'),
+                            hint: _showLocalLoading
+                                ? null
+                                : 'Double tap to ${state.playbackState == StreamState.playing ? 'stop and reset' : 'play'}',
+                            liveRegion: _showLocalLoading,
+                            child: Material(
+                              color: const Color(0xFF0F0404),
+                              shape: const CircleBorder(),
+                              elevation: 4,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: (!isOnline ||
+                                        state.playbackState ==
+                                            StreamState.loading ||
+                                        state.playbackState ==
+                                            StreamState.buffering ||
+                                        _showLocalLoading)
+                                    ? (!isOnline
+                                        ? () {
+                                            // Network alert will automatically appear via main.dart
+                                            // No manual dialog needed with new system
+                                            return;
+                                          }
+                                        : null)
+                                    : () {
+                                        if (state.playbackState ==
+                                            StreamState.playing) {
+                                          // PAUSE: Set flag to prevent spinner
+                                          setState(() {
+                                            _userPressedPause = true;
+                                          });
+                                          context
+                                              .read<StreamBloc>()
+                                              .add(PauseStream());
+                                        } else {
+                                          // PLAY: Show spinner - starting stream takes time
+                                          LoggerService.debug(
+                                              '🔄 SPINNER: Play button pressed, current state: ${state.playbackState}');
+                                          setState(() {
+                                            _showLocalLoading = true;
+                                            _userPressedPause = false;
+                                          });
+                                          LoggerService.debug(
+                                              '🔄 SPINNER: Spinner enabled, starting timeout');
+                                          _startSpinnerTimeout();
+                                          context
+                                              .read<StreamBloc>()
+                                              .add(StartStream());
+                                        }
+                                      },
+                                child: SizedBox(
+                                  width: _isSmallPhone(context)
                                       ? 90.0
                                       : (MediaQuery.of(context)
                                                   .size
@@ -488,88 +487,58 @@ class _HomePageState extends State<HomePage> {
                                               600
                                           ? 150.0
                                           : 120.0),
-                                  padding: EdgeInsets.zero,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0F0404),
-                                    shape: const CircleBorder(),
-                                    elevation: 4,
-                                  ),
-                                  icon: _showLocalLoading
-                                      ? Semantics(
-                                          label: 'Loading audio',
-                                          liveRegion: true,
-                                          child: SizedBox(
+                                  height: _isSmallPhone(context)
+                                      ? 90.0
+                                      : (MediaQuery.of(context)
+                                                  .size
+                                                  .shortestSide >
+                                              600
+                                          ? 150.0
+                                          : 120.0),
+                                  child: Center(
+                                    child: _showLocalLoading
+                                        ? SizedBox(
                                             width: _isSmallPhone(context)
-                                                ? 48.0
+                                                ? 38.0
                                                 : (MediaQuery.of(context)
                                                             .size
                                                             .shortestSide >
                                                         600
-                                                    ? 80.0
-                                                    : 64.0),
+                                                    ? 64.0
+                                                    : 50.0),
                                             height: _isSmallPhone(context)
-                                                ? 48.0
+                                                ? 38.0
                                                 : (MediaQuery.of(context)
                                                             .size
                                                             .shortestSide >
                                                         600
-                                                    ? 80.0
-                                                    : 64.0),
+                                                    ? 64.0
+                                                    : 50.0),
                                             child: CircularProgressIndicator(
                                               valueColor:
                                                   AlwaysStoppedAnimation<Color>(
                                                       Colors.white),
-                                              strokeWidth: 3.0,
+                                              strokeWidth: 4.0,
                                               strokeCap: StrokeCap.round,
                                             ),
+                                          )
+                                        : Icon(
+                                            _getPlaybackIcon(
+                                                state.playbackState),
+                                            size: _isSmallPhone(context)
+                                                ? 90.0
+                                                : (MediaQuery.of(context)
+                                                            .size
+                                                            .shortestSide >
+                                                        600
+                                                    ? 150.0
+                                                    : 120.0),
+                                            color: Colors.white,
                                           ),
-                                        )
-                                      : Icon(
-                                          _getPlaybackIcon(state.playbackState),
-                                          color: Colors.white,
-                                        ),
-                                  onPressed: (!isOnline ||
-                                          state.playbackState ==
-                                              StreamState.loading ||
-                                          state.playbackState ==
-                                              StreamState.buffering ||
-                                          _showLocalLoading)
-                                      ? (!isOnline
-                                          ? () {
-                                              // Network alert will automatically appear via main.dart
-                                              // No manual dialog needed with new system
-                                              return;
-                                            }
-                                          : null)
-                                      : () {
-                                          if (state.playbackState ==
-                                              StreamState.playing) {
-                                            // PAUSE: Set flag to prevent spinner
-                                            setState(() {
-                                              _userPressedPause = true;
-                                            });
-                                            context
-                                                .read<StreamBloc>()
-                                                .add(PauseStream());
-                                          } else {
-                                            // PLAY: Show spinner - starting stream takes time
-                                            LoggerService.debug(
-                                                '🔄 SPINNER: Play button pressed, current state: ${state.playbackState}');
-                                            setState(() {
-                                              _showLocalLoading = true;
-                                              _userPressedPause = false;
-                                            });
-                                            LoggerService.debug(
-                                                '🔄 SPINNER: Spinner enabled, starting timeout');
-                                            _startSpinnerTimeout();
-                                            context
-                                                .read<StreamBloc>()
-                                                .add(StartStream());
-                                          }
-                                        },
+                                  ),
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                         // Error Display
