@@ -13,8 +13,8 @@
   "source": {
     "path": "."
   },
-  "source_files": "flutter_native_splash/Sources/flutter_native_splash/**/*",
-  "public_header_files": "flutter_native_splash/Sources/flutter_native_splash/**/*.h",
+  "source_files": "flutter_native_splash/Sources/flutter_native_splash/**/*.{h,m}",
+  "public_header_files": "flutter_native_splash/Sources/flutter_native_splash/include/**/*.h",
   "dependencies": {
     "Flutter": [
 

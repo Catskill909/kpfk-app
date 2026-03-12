@@ -1,6 +1,6 @@
 # iOS Build Warnings — Deep Audit & Fix Plan
 
-> Generated: 2025-03-12 | **Last updated: 2025-03-12 12:45 PM**
+> Generated: 2025-03-12 | **Last updated: 2025-03-12 1:00 PM**
 > Project: KPFK Radio iOS (Flutter)
 > Xcode deployment target: **iOS 13.0** (project & Podfile aligned)
 
@@ -12,8 +12,8 @@
 |-------|-------------|--------|
 | **Phase 1** | Easy wins — our code | ✅ **DONE** (committed `028de24`) |
 | **Phase 2** | Deployment target alignment | ✅ **DONE** (committed `d9be03d`) |
-| **Phase 3A** | Suppress linker warning + Pods recommended settings | 🔲 Next |
-| **Phase 3B** | Upgrade `url_launcher` and `flutter_native_splash` | 🔲 Pending |
+| **Phase 3A** | Suppress linker warning + Pods recommended settings | ✅ **DONE** (linker flag in Podfile; Pods settings = Xcode manual step) |
+| **Phase 3B** | Upgrade `url_launcher` and `flutter_native_splash` | ✅ **DONE** (`flutter_native_splash` upgraded to 2.4.7; `url_launcher_ios` 6.4.x needs newer Flutter SDK — unfixable) |
 | **Phase 3C** | Upgrade `flutter_inappwebview` | 🔲 Pending (risky — beta) |
 | **Unfixable** | `audio_service` deprecated API | ❌ Awaiting upstream author |
 
@@ -28,7 +28,7 @@
 | 3 | `audio_service` — `initWithImage:` deprecated | Third-party (v0.18.18) | ❌ **No fix available** — known since 2021, author hasn't patched | Unfixable |
 | 4 | `flutter_inappwebview_ios` — 20+ deprecation warnings | Third-party (v1.2.0-beta.2) | ⚠️ beta.3 exists but **does NOT fix** these warnings | 3C |
 | 5 | `flutter_native_splash` — xcprivacy build rule | Third-party (v2.4.4) | ✅ **v2.4.7 available** — podspec fix included | 3B |
-| 6 | `url_launcher_ios` — `keyWindow` deprecated | Third-party (v6.3.3) | ✅ **v6.4.x fixes this** — adds UIScene support | 3B |
+| 6 | `url_launcher_ios` — `keyWindow` deprecated | Third-party (v6.3.3) | ❌ **v6.4.x fixes this BUT requires Flutter 3.38+/Dart 3.10+** — our SDK is 3.6.2 | Unfixable (SDK) |
 
 ---
 
@@ -189,11 +189,10 @@ This hides the warnings but does not fix the underlying code.
 2. Let Xcode update Pods recommended settings
 3. Commit & push
 
-### Phase 3B — Do next (~15 min + test)
-1. Upgrade `url_launcher` to `^6.3.1` and run `flutter pub upgrade`
-2. Upgrade `flutter_native_splash` to `^2.4.7` and run `flutter pub upgrade`
-3. Clean rebuild, test splash screen and URL launching
-4. Commit & push
+### Phase 3B — DONE
+- ✅ `flutter_native_splash` upgraded `^2.3.10` → `^2.4.7` (fixes xcprivacy warning)
+- ❌ `url_launcher_ios` 6.4.x requires Flutter 3.38+/Dart 3.10+ — cannot upgrade with current SDK `^3.6.2`
+- The `keyWindow` deprecation warning will persist until Flutter SDK is upgraded
 
 ### Phase 3C — Skip for now
 - `flutter_inappwebview` — beta.3 does NOT fix the warnings. Wait for stable.
