@@ -494,10 +494,40 @@ class _HomePageState extends State<HomePage> {
                                     shape: const CircleBorder(),
                                     elevation: 4,
                                   ),
-                                  icon: Icon(
-                                    _getPlaybackIcon(state.playbackState),
-                                    color: Colors.white,
-                                  ),
+                                  icon: _showLocalLoading
+                                      ? Semantics(
+                                          label: 'Loading audio',
+                                          liveRegion: true,
+                                          child: SizedBox(
+                                            width: _isSmallPhone(context)
+                                                ? 48.0
+                                                : (MediaQuery.of(context)
+                                                            .size
+                                                            .shortestSide >
+                                                        600
+                                                    ? 80.0
+                                                    : 64.0),
+                                            height: _isSmallPhone(context)
+                                                ? 48.0
+                                                : (MediaQuery.of(context)
+                                                            .size
+                                                            .shortestSide >
+                                                        600
+                                                    ? 80.0
+                                                    : 64.0),
+                                            child: CircularProgressIndicator(
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                      Colors.white),
+                                              strokeWidth: 3.0,
+                                              strokeCap: StrokeCap.round,
+                                            ),
+                                          ),
+                                        )
+                                      : Icon(
+                                          _getPlaybackIcon(state.playbackState),
+                                          color: Colors.white,
+                                        ),
                                   onPressed: (!isOnline ||
                                           state.playbackState ==
                                               StreamState.loading ||
@@ -539,29 +569,6 @@ class _HomePageState extends State<HomePage> {
                                         },
                                 ),
                               ),
-                              if (_showLocalLoading)
-                                Positioned.fill(
-                                  child: Center(
-                                    child: Semantics(
-                                      label: 'Loading audio',
-                                      liveRegion: true,
-                                      child: SizedBox(
-                                        width: _isSmallPhone(context)
-                                            ? 110.0
-                                            : 140.0,
-                                        height: _isSmallPhone(context)
-                                            ? 110.0
-                                            : 140.0,
-                                        child: CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
-                                          strokeWidth: 3,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
