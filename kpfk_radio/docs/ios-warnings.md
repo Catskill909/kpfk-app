@@ -1,281 +1,202 @@
 # iOS Build Warnings — Deep Audit & Fix Plan
 
-> Generated: 2025-03-12
+> Generated: 2025-03-12 | **Last updated: 2025-03-12 12:45 PM**
 > Project: KPFK Radio iOS (Flutter)
-> Xcode deployment target: **iOS 13.0** (project) / **iOS 12.0** (Podfile pods override)
+> Xcode deployment target: **iOS 13.0** (project & Podfile aligned)
 
 ---
 
-## Summary
+## Progress Tracker
 
-| # | Warning | Source | Fixable by us? | Phase |
-|---|---------|--------|----------------|-------|
-| 1 | Duplicate library `-lswiftCoreGraphics` | Linker / Runner | ✅ Yes | 1 |
-| 2 | AppIcon — 6 unassigned children | `Assets.xcassets` | ✅ Yes | 1 |
-| 3 | `.allowBluetooth` deprecated (×2) | `AppDelegate.swift:15`, `MetadataController.swift:98` | ✅ Yes | 1 |
-| 4 | Dead code after `return` | `MetadataController.swift:178` | ✅ Yes | 1 |
-| 5 | Podfile sets pods to iOS 12.0 vs Flutter 13.0 (×8 pods) | `Podfile:44` | ✅ Yes | 2 |
-| 6 | `audio_service` — deprecated `initWithImage:` | Third-party plugin | ⚠️ Upgrade | 3 |
-| 7 | `flutter_inappwebview_ios` — 16+ deprecation warnings | Third-party plugin | ⚠️ Upgrade | 3 |
-| 8 | `flutter_native_splash` — no rule for `PrivacyInfo.xcprivacy` | Third-party plugin | ⚠️ Upgrade | 3 |
+| Phase | Description | Status |
+|-------|-------------|--------|
+| **Phase 1** | Easy wins — our code | ✅ **DONE** (committed `028de24`) |
+| **Phase 2** | Deployment target alignment | ✅ **DONE** (committed `d9be03d`) |
+| **Phase 3A** | Suppress linker warning + Pods recommended settings | 🔲 Next |
+| **Phase 3B** | Upgrade `url_launcher` and `flutter_native_splash` | 🔲 Pending |
+| **Phase 3C** | Upgrade `flutter_inappwebview` | 🔲 Pending (risky — beta) |
+| **Unfixable** | `audio_service` deprecated API | ❌ Awaiting upstream author |
 
 ---
 
-## Phase 1 — Easy Wins (our code, minutes each)
+## Current Remaining Warnings (post Phase 1 & 2)
 
-### 1.1 Duplicate library `-lswiftCoreGraphics`
+| # | Warning | Source | Fixable? | Phase |
+|---|---------|--------|----------|-------|
+| 1 | Duplicate library `-lswiftCoreGraphics` | Xcode 15+ linker behavior | ✅ Suppress via linker flag | 3A |
+| 2 | Pods — "Update to recommended settings" | Pods.xcodeproj | ✅ Let Xcode update | 3A |
+| 3 | `audio_service` — `initWithImage:` deprecated | Third-party (v0.18.18) | ❌ **No fix available** — known since 2021, author hasn't patched | Unfixable |
+| 4 | `flutter_inappwebview_ios` — 20+ deprecation warnings | Third-party (v1.2.0-beta.2) | ⚠️ beta.3 exists but **does NOT fix** these warnings | 3C |
+| 5 | `flutter_native_splash` — xcprivacy build rule | Third-party (v2.4.4) | ✅ **v2.4.7 available** — podspec fix included | 3B |
+| 6 | `url_launcher_ios` — `keyWindow` deprecated | Third-party (v6.3.3) | ✅ **v6.4.x fixes this** — adds UIScene support | 3B |
+
+---
+
+## COMPLETED — Phase 1: Easy Wins
+
+All done and committed in `028de24`:
+- ✅ `.allowBluetooth` → `.allowBluetoothA2DP` (AppDelegate.swift + MetadataController.swift)
+- ✅ Deleted 6 orphaned AppIcon PNGs (pre-iOS 7 legacy sizes)
+- ✅ Removed ~130 lines of dead code in MetadataController.swift
+- ✅ Added OTHER_LDFLAGS dedup in Podfile
+
+---
+
+## COMPLETED — Phase 2: Deployment Target Alignment
+
+All done and committed in `d9be03d`:
+- ✅ Podfile: `IPHONEOS_DEPLOYMENT_TARGET` changed from `12.0` → `13.0`
+- ✅ Full clean rebuild: `flutter clean` + `pod deintegrate` + `pod install`
+- ✅ Eliminated all 8 "Building for iOS-12.0 but linking with 13.0" warnings
+- ✅ Fixed archive build failure (`Flutter/Flutter.h file not found`)
+
+---
+
+## Phase 3A — Suppress Linker Warning + Pods Settings (~5 min)
+
+### 3A.1 Duplicate library `-lswiftCoreGraphics`
 
 **Warning:** `Ignoring duplicate libraries: '-lswiftCoreGraphics'`
 
-**Root cause:** The `-lswiftCoreGraphics` linker flag appears twice — once from the Swift implicit linking and once from an explicit `OTHER_LDFLAGS` entry (or a CocoaPods-injected duplicate).
+**Research findings (source: [Indie Stack blog](https://indiestack.com/2023/10/xcode-15-duplicate-library-linker-warnings/)):**
+- This is a **known Xcode 15+ bug** (Apple FB13229994)
+- Xcode's linker now warns on duplicate library flags, but Xcode *itself* generates the duplicates via derived dependency resolution
+- The `OTHER_LDFLAGS.uniq` approach in Podfile doesn't help because the duplicate comes from Xcode's implicit Swift library linking, NOT from explicit flags
+- **The correct fix** is to pass `-Wl,-no_warn_duplicate_libraries` to the linker
 
-**Fix:**
-1. Open `Runner.xcodeproj` → **Build Settings** → search `Other Linker Flags`.
-2. Remove any explicit `-lswiftCoreGraphics` entry if present.
-3. If it's injected by CocoaPods, add to the `post_install` block in `Podfile`:
-   ```ruby
-   # Remove duplicate Swift library flags
-   config.build_settings['OTHER_LDFLAGS'] = config.build_settings.fetch('OTHER_LDFLAGS', []).uniq
-   ```
-4. Run `pod install` again.
-
-**Risk:** None — the duplicate is already being ignored; this just silences the warning.
-
----
-
-### 1.2 AppIcon — 6 unassigned children
-
-**Warning:** `The app icon set "AppIcon" has 6 unassigned children.`
-
-**Root cause:** The `AppIcon.appiconset` folder contains 6 PNG files that are **not referenced** in `Contents.json`:
-
-| File | Size | Why it's orphaned |
-|------|------|-------------------|
-| `Icon-App-50x50@1x.png` | 50×50 | Legacy iPad Spotlight (pre-iOS 7) |
-| `Icon-App-50x50@2x.png` | 100×100 | Legacy iPad Spotlight (pre-iOS 7) |
-| `Icon-App-57x57@1x.png` | 57×57 | Legacy iPhone App icon (pre-iOS 7) |
-| `Icon-App-57x57@2x.png` | 114×114 | Legacy iPhone App icon (pre-iOS 7) |
-| `Icon-App-72x72@1x.png` | 72×72 | Legacy iPad App icon (pre-iOS 7) |
-| `Icon-App-72x72@2x.png` | 144×144 | Legacy iPad App icon (pre-iOS 7) |
-
-These are all **pre-iOS 7 legacy sizes** that Apple no longer requires. They were likely generated by `flutter_launcher_icons` but Xcode's modern asset catalog doesn't map them to any slot.
-
-**Fix:** Delete the 6 orphaned files:
-```bash
-cd ios/Runner/Assets.xcassets/AppIcon.appiconset
-rm Icon-App-50x50@1x.png Icon-App-50x50@2x.png \
-   Icon-App-57x57@1x.png Icon-App-57x57@2x.png \
-   Icon-App-72x72@1x.png Icon-App-72x72@2x.png
-```
-
-**Risk:** None — these icons are unused on iOS 13+.
-
----
-
-### 1.3 `.allowBluetooth` deprecated (2 locations)
-
-**Warning:** `'allowBluetooth' was deprecated in iOS 8.0: renamed to 'AVAudioSession.CategoryOptions.allowBluetoothHFP'`
-
-**Locations:**
-- `AppDelegate.swift:15` — `options: [.allowBluetooth, .allowAirPlay]`
-- `MetadataController.swift:98` — `options: [.allowAirPlay, .allowBluetooth]`
-
-**Analysis:**
-- `.allowBluetooth` enables the **HFP (Hands-Free Profile)** — low-quality, mono, telephony-grade audio.
-- For a **radio streaming app**, you actually want **A2DP (Advanced Audio Distribution Profile)** — high-quality stereo audio.
-- A2DP is used **by default** when the category is `.playback`; no explicit option is needed.
-- If you want both HFP headsets *and* A2DP headphones to work, use `.allowBluetoothA2DP` (available since iOS 10).
-
-**Fix — `AppDelegate.swift:15`:**
-```swift
-// Before:
-try session.setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowAirPlay])
-// After:
-try session.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP, .allowAirPlay])
-```
-
-**Fix — `MetadataController.swift:98`:**
-```swift
-// Before:
-try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetooth])
-// After:
-try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
-```
-
-**Risk:** Low. `.allowBluetoothA2DP` is the correct option for music/radio playback and has been available since iOS 10. HFP headsets will still work for calls but the audio session won't route playback through HFP's mono channel.
-
----
-
-### 1.4 Dead code after `return` in MetadataController
-
-**Warning:** `MetadataController.swift:178:9 Code after 'return' will never be executed`
-
-**Root cause:** `performMetadataUpdate()` was disabled by adding an early `return` at line 176, but the ~135 lines of original implementation code (lines 178–311) were left in place.
-
-```swift
-private func performMetadataUpdate() {
-    // DISABLED: This method was overriding AppDelegate's metadata
-    print("[METADATA_CONTROLLER] performMetadataUpdate() DISABLED - AppDelegate handles all metadata")
-    pendingMetadata = nil
-    return          // ← line 176
-
-    guard let meta = pendingMetadata else { return }   // ← line 178, dead code starts here
-    // ... 130+ lines of dead code ...
-}
-```
-
-**Fix:** Remove all dead code after the `return` statement (lines 178–311), keeping only the disabled stub:
-```swift
-private func performMetadataUpdate() {
-    // DISABLED: AppDelegate handles all metadata now
-    print("[METADATA_CONTROLLER] performMetadataUpdate() DISABLED - AppDelegate handles all metadata")
-    pendingMetadata = nil
-}
-```
-
-**Risk:** None — the code is already unreachable. Removing it improves readability and eliminates the warning.
-
----
-
-## Phase 2 — Deployment Target Alignment (config change, moderate risk)
-
-### 2.1 Podfile iOS 12.0 → 13.0 mismatch
-
-**Warning (×8 pods):**
-```
-Building for iOS-12.0, but linking with dylib '@rpath/Flutter.framework/Flutter'
-which was built for newer version 13.0
-```
-
-**Affected pods:** `audio_service`, `audio_session`, `connectivity_plus`, `flutter_inappwebview_ios`, `flutter_native_splash`, `just_audio`, `path_provider_foundation`, `shared_preferences_foundation`, `sqflite_darwin`, `url_launcher_ios`
-
-**Root cause:** The Podfile `post_install` block explicitly overrides **every pod** to iOS 12.0:
+**Fix — add to Podfile `post_install`:**
 ```ruby
-# Podfile:44
-config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+# Suppress Xcode 15+ duplicate library linker warning (Apple bug FB13229994)
+installer.pods_project.build_configurations.each do |config|
+  config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
+  config.build_settings['OTHER_LDFLAGS'] << '-Wl,-no_warn_duplicate_libraries'
+end
 ```
-But the **Runner project** and **Flutter.framework** both target iOS 13.0. When pods are compiled for 12.0 but link against a framework built for 13.0, the linker emits this warning.
 
-**Fix — `Podfile:44`:**
-```ruby
+Also add to Runner target in Xcode:
+- Build Settings → Other Linker Flags → add `-Wl,-no_warn_duplicate_libraries`
+
+**Risk:** None. This only suppresses the cosmetic warning. The duplicate is already being ignored by the linker.
+
+### 3A.2 Pods — "Update to recommended settings"
+
+**Warning:** Yellow triangle on `Pods.xcodeproj` — "Update to recommended settings"
+
+**Fix:** In Xcode, click the warning on the Pods project and "Perform Changes". Same settings update we did for Runner (remove deprecated embed Swift flags).
+
+**Risk:** None. These are Xcode modernization settings.
+
+---
+
+## Phase 3B — Safe Package Upgrades (~15 min + testing)
+
+### 3B.1 `url_launcher_ios` — `keyWindow` deprecated
+
+**Current:** `url_launcher: ^6.2.5` → resolves to `url_launcher_ios: 6.3.3`
+**Warning:** `'keyWindow' was deprecated in iOS 13.0: Should not be used for applications that support multiple scenes`
+
+**Research findings:**
+- `url_launcher_ios` **6.4.0** added UIScene compatibility and fixed `keyWindow` deprecation
+- `url_launcher_ios` **6.4.1** is the latest (requires Flutter 3.38+)
+- Our Dart SDK is `^3.6.2` which supports these versions
+- The parent package `url_launcher` **6.3.1** is already installed
+
+**Fix — `pubspec.yaml`:**
+```yaml
 # Before:
-config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+url_launcher: ^6.2.5
 # After:
-config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+url_launcher: ^6.3.1
 ```
+Then `flutter pub upgrade url_launcher` — this should pull `url_launcher_ios` ≥6.4.0.
 
-Then:
-```bash
-cd ios
-rm -rf Pods Podfile.lock
-pod install
+**Risk:** Low. This is a first-party Flutter team package with stable releases.
+
+### 3B.2 `flutter_native_splash` — xcprivacy build rule
+
+**Current:** `flutter_native_splash: ^2.3.10` → resolves to v2.4.4
+**Warning:** `no rule to process file 'PrivacyInfo.xcprivacy' of type 'text.xml'`
+
+**Research findings (source: [GitHub issue #761](https://github.com/jonbhanson/flutter_native_splash/issues/761)):**
+- The podspec incorrectly includes `PrivacyInfo.xcprivacy` in `source_files` instead of `resource_bundles`
+- **v2.4.7 is available** and likely includes the podspec fix
+- This is a build-time-only warning — the privacy manifest still works correctly
+
+**Fix — `pubspec.yaml`:**
+```yaml
+# Before:
+flutter_native_splash: ^2.3.10
+# After:
+flutter_native_splash: ^2.4.7
 ```
+Then `flutter pub upgrade flutter_native_splash`.
 
-**Risk:** Medium-low. Raising the minimum from 12.0 to 13.0 drops support for iOS 12 devices. However:
-- The project already targets 13.0 in the Xcode project settings
-- Flutter itself requires 13.0 (the framework is built for 13.0)
-- iOS 12 has <1% market share as of 2025
-- **You are effectively already iOS 13+ only** — this just makes it explicit
+**Risk:** Low. Splash screen generation is done at build time. Test that splash still displays correctly.
 
 ---
 
-## Phase 3 — Third-Party Plugin Warnings (upgrades, higher risk)
+## Phase 3C — Risky Package Upgrade (flutter_inappwebview)
 
-These warnings come from **code inside third-party pub packages** in `~/.pub-cache/`. We cannot edit them directly — the fix is to upgrade to newer versions that have addressed these issues.
+### 3C.1 `flutter_inappwebview_ios` — 20+ deprecation warnings
 
-### 3.1 `audio_service` (v0.18.18)
+**Current:** `flutter_inappwebview: ^6.1.8` → resolves to `flutter_inappwebview_ios: 1.2.0-beta.2`
+**Warnings (20+):** `keyWindow`, `spotlightSuggestion`, `clearCache`, `selectionGranularity`, `SFAuthenticationSession`, `SecTrustEvaluate`, storyboard target mismatch, etc.
 
-**Warning:**
+**Research findings:**
+- `flutter_inappwebview: 6.2.0-beta.3` was released **11 days ago**
+- The beta.3 changelog fixes a few bugs but **does NOT address the iOS deprecation warnings**
+- The stable version is `6.1.5` but it uses the same `flutter_inappwebview_ios: 1.2.0-beta.2`
+- **These deprecation warnings are baked into the plugin source code** — the author has not updated them
+- All deprecated APIs still function correctly on current iOS versions
+
+**Recommendation:** **Do NOT upgrade yet.** The warnings are cosmetic only. Wait for a stable release that addresses deprecations. Upgrading beta→beta risks introducing new bugs with no warning reduction.
+
+**Alternative:** If the warnings are truly bothersome, they can be suppressed per-pod in the Podfile:
+```ruby
+# Suppress deprecation warnings for flutter_inappwebview_ios
+if target.name == 'flutter_inappwebview_ios'
+  config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+end
 ```
-AudioServicePlugin.m:213:59 'initWithImage:' is deprecated:
-first deprecated in iOS 10.0 - Use -initWithBoundsSize:requestHandler:
-```
-
-**Analysis:** The plugin uses the old `MPMediaItemArtwork(image:)` initializer instead of the block-based `MPMediaItemArtwork(boundsSize:requestHandler:)`. This is a known issue.
-
-**Fix:** Check for a newer release:
-```bash
-flutter pub outdated audio_service
-```
-- If a newer version exists (>0.18.18), upgrade in `pubspec.yaml`
-- If not, this warning is cosmetic only — the deprecated API still functions. File an issue upstream or wait for the next release.
-
-**Impact if ignored:** None functionally. The old API still works on all current iOS versions.
+This hides the warnings but does not fix the underlying code.
 
 ---
 
-### 3.2 `flutter_inappwebview_ios` (v1.2.0-beta.2)
+## Unfixable — `audio_service` (v0.18.18)
 
-**16+ warnings** across multiple files, including:
-- `'spotlightSuggestion'` deprecated → use `lookupSuggestion` (iOS 10+)
-- `'clearCache'` deprecated → use `InAppWebViewManager.clearAllCache`
-- `'selectionGranularity'` deprecated (iOS 11+) — property is ignored
-- `'init(url:entersReaderIfAvailable:)'` deprecated (iOS 11+)
-- `'SFAuthenticationSession'` deprecated → use `ASWebAuthenticationSession` (iOS 12+)
-- Unnecessary iOS version check (guard always true)
-- Non-optional compared to nil (always true)
-- Storyboard build target mismatch
+**Warning:** `'initWithImage:' is deprecated: first deprecated in iOS 10.0`
 
-**Analysis:** This is a **beta** version (`1.2.0-beta.2`). These are all internal to the plugin.
+**Research findings:**
+- This warning has existed since **at least 2021** (Stack Overflow reports from Flutter 2.5.0 era)
+- The fix is a one-line change in `AudioServicePlugin.m:213` — replace `initWithImage:` with `initWithBoundsSize:requestHandler:`
+- The package author **has not released a fix** in any version up to 0.18.18
+- `audio_service: 0.18.18` is the **latest version** on pub.dev
+- No newer version exists to upgrade to
 
-**Fix:**
-```bash
-flutter pub outdated flutter_inappwebview
-```
-- Check if a stable 1.2.x or newer exists
-- The `^6.1.8` constraint in `pubspec.yaml` maps to `flutter_inappwebview_ios` 1.2.0-beta.2 via the federated plugin system
-- Upgrading to a newer `flutter_inappwebview` version should pull in fixes
+**Impact:** Zero functional impact. The deprecated API works on all iOS versions including iOS 18+. Apple has not removed it.
 
-**Impact if ignored:** Cosmetic only. All deprecated APIs still function. The plugin works correctly despite these warnings.
+**Options:**
+1. **Wait** for the author to release a fix (most practical)
+2. **Fork** the package and patch the one line (overkill for a cosmetic warning)
+3. **Suppress** with Podfile per-target `GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS = NO` (hides it)
 
 ---
 
-### 3.3 `flutter_native_splash` (v2.4.4)
+## Recommended Next Steps
 
-**Warning:**
-```
-no rule to process file 'PrivacyInfo.xcprivacy' of type 'text.xml' for architecture 'arm64'
-```
+### Phase 3A — Do now (~5 min)
+1. Add `-Wl,-no_warn_duplicate_libraries` linker flag (Podfile + Runner target)
+2. Let Xcode update Pods recommended settings
+3. Commit & push
 
-**Analysis:** Apple introduced Privacy Manifest files (`.xcprivacy`) in Xcode 15. The plugin includes one but the build rules don't know how to process it for the given architecture. This is a packaging issue in the plugin.
+### Phase 3B — Do next (~15 min + test)
+1. Upgrade `url_launcher` to `^6.3.1` and run `flutter pub upgrade`
+2. Upgrade `flutter_native_splash` to `^2.4.7` and run `flutter pub upgrade`
+3. Clean rebuild, test splash screen and URL launching
+4. Commit & push
 
-**Fix:**
-```bash
-flutter pub outdated flutter_native_splash
-```
-- Upgrade if a version >2.4.4 exists (likely fixed in newer releases)
-- Alternatively, this can be suppressed in the Podfile post_install block by adding the xcprivacy file to the resources build phase
+### Phase 3C — Skip for now
+- `flutter_inappwebview` — beta.3 does NOT fix the warnings. Wait for stable.
 
-**Impact if ignored:** None — the privacy manifest is still included correctly in the final app bundle. The warning is a build system quirk.
-
----
-
-## Recommended Execution Order
-
-### Step 1 — Phase 1 fixes (do all at once, ~15 min)
-1. Fix `.allowBluetooth` → `.allowBluetoothA2DP` in both Swift files
-2. Delete 6 orphaned AppIcon PNGs
-3. Remove dead code in `MetadataController.swift`
-4. Address duplicate linker flag
-
-### Step 2 — Phase 2 fix (~5 min + rebuild)
-1. Change Podfile deployment target from `12.0` to `13.0`
-2. Run `pod install`
-3. Clean build and verify
-
-### Step 3 — Phase 3 upgrades (variable time, test thoroughly)
-1. Run `flutter pub outdated` to check all package versions
-2. Upgrade packages one at a time, testing after each
-3. Priority order: `flutter_native_splash` → `audio_service` → `flutter_inappwebview`
-
----
-
-## Warnings We Cannot Fix (upstream only)
-
-These warnings are in third-party code and will persist until the package authors release updates:
-
-| Package | Warning | Status |
-|---------|---------|--------|
-| `audio_service` 0.18.18 | `initWithImage:` deprecated | Awaiting upstream fix |
-| `flutter_inappwebview_ios` 1.2.0-beta.2 | 16 deprecation warnings | Beta — expect fixes in stable |
-| `flutter_native_splash` 2.4.4 | xcprivacy build rule | Likely fixed in newer version |
+### Unfixable — Accept
+- `audio_service` — No newer version available. Warning is cosmetic only.
