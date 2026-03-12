@@ -95,7 +95,7 @@ class MetadataController {
         
         do {
             print("[AUDIO] Attempting to set AVAudioSession category to .playback")
-            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetooth])
+            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
             print("[AUDIO] Category set successfully")
         } catch {
             print("[AUDIO][ERROR] Failed to set category: \(error)")
@@ -170,144 +170,9 @@ class MetadataController {
 
     /// Actually perform the lockscreen metadata update (runs on main thread)
     private func performMetadataUpdate() {
-        // DISABLED: This method was overriding AppDelegate's metadata
+        // DISABLED: AppDelegate handles all metadata now
         print("[METADATA_CONTROLLER] performMetadataUpdate() DISABLED - AppDelegate handles all metadata")
         pendingMetadata = nil
-        return
-        
-        guard let meta = pendingMetadata else { return }
-        pendingMetadata = nil
-        
-        // Start background task to ensure update completes even in background
-        if backgroundTaskID != .invalid {
-            UIApplication.shared.endBackgroundTask(backgroundTaskID)
-        }
-        
-        backgroundTaskID = UIApplication.shared.beginBackgroundTask { [weak self] in
-            // Cleanup if expired
-            guard let self = self else { return }
-            if self.backgroundTaskID != .invalid {
-                UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                self.backgroundTaskID = .invalid
-            }
-        }
-        
-        DispatchQueue.main.async {
-            // Verify audio session before updating
-            let session = AVAudioSession.sharedInstance()
-            if session.category != .playback {
-                print("[AUDIO][WARNING] AVAudioSession status incorrect, reconfiguring before update")
-                if !self.configureAudioSession() {
-                    print("[AUDIO][RECOVERY] Audio session configuration failed, scheduling retry")
-                    // If configuration fails, retry metadata update after delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        self.pendingMetadata = meta
-                        self.performMetadataUpdate()
-                    }
-                    
-                    // End background task if we're going to retry
-                    if self.backgroundTaskID != .invalid {
-                        UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                        self.backgroundTaskID = .invalid
-                    }
-                    return
-                }
-            }
-            
-            // Only update if changed or forced
-            if !meta.forceUpdate &&
-                meta.title == self.lastTitle &&
-                meta.artist == self.lastArtist &&
-                meta.artworkUrl == self.lastArtworkUrl &&
-                meta.isPlaying == self.lastIsPlaying {
-                print(" No significant metadata change; skipping update.")
-                
-                // End background task
-                if self.backgroundTaskID != .invalid {
-                    UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                    self.backgroundTaskID = .invalid
-                }
-                return
-            }
-            
-            self.lastTitle = meta.title
-            self.lastArtist = meta.artist
-            self.lastArtworkUrl = meta.artworkUrl
-            self.lastIsPlaying = meta.isPlaying
-            self.lastForceUpdate = meta.forceUpdate
-
-            // Forensic: Log playback state and session status
-            print("[FORENSIC] performMetadataUpdate: isPlaying=\(meta.isPlaying), playbackRate=\(meta.isPlaying ? 1.0 : 0.0), AVAudioSession category=\(session.category), isOtherAudioPlaying=\(session.isOtherAudioPlaying)")
-            
-            // Double-check audio session settings
-            // Always try to ensure session is active before updating metadata
-            do {
-                print("[AUDIO][RECOVERY] Ensuring AVAudioSession is active before metadata update")
-                try session.setActive(true)
-                print("[AUDIO][RECOVERY] AVAudioSession activation confirmed")
-            } catch {
-                print("[AUDIO][ERROR] Failed to activate AVAudioSession: \(error)")
-            }
-
-            // CRITICAL FIX: Include MPMediaItemPropertyPlaybackDuration
-            let nowPlayingInfo: [String: Any] = [
-                MPMediaItemPropertyTitle: meta.title,
-                MPMediaItemPropertyArtist: meta.artist,
-                MPNowPlayingInfoPropertyPlaybackRate: meta.isPlaying ? 1.0 : 0.0,
-                MPNowPlayingInfoPropertyElapsedPlaybackTime: 0,
-                MPMediaItemPropertyPlaybackDuration: 0,
-                MPNowPlayingInfoPropertyIsLiveStream: true,
-                // CRITICAL FIX: Add a timestamp to ensure the dictionary is always different
-                // This forces iOS to update the display even if content appears the same
-                "_timestamp": Date().timeIntervalSince1970
-            ]
-
-            // Log update attempt
-            print("[UPDATE] MPNowPlayingInfoCenter: Title=\"\(meta.title)\", Artist=\"\(meta.artist)\", isPlaying=\(meta.isPlaying), force=\(meta.forceUpdate)")
-
-            // Artwork (asynchronously load artwork to avoid blocking the main thread)
-            if let urlString = meta.artworkUrl, let url = URL(string: urlString) {
-                URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-                    guard let self = self else { return }
-                    let updatedNowPlayingInfo = nowPlayingInfo
-                    if let data = data, let image = UIImage(data: data) {
-                        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                        // Always set a fresh, complete dictionary atomically
-                        var freshInfo = updatedNowPlayingInfo
-                        freshInfo[MPMediaItemPropertyArtwork] = artwork
-                        MPNowPlayingInfoCenter.default().nowPlayingInfo = freshInfo
-                        print("[METADATA] Atomically updated NowPlayingInfoCenter with artwork at \(Date())\nMetadata: \(freshInfo)")
-                    } else if let error = error {
-                        print(" ERROR: Failed to load artwork image: \(error)")
-                    }
-                    DispatchQueue.main.async {
-                        // Verify the update worked properly
-                        self.verifyMetadataUpdateSucceeded(expectedTitle: meta.title, expectedArtist: meta.artist)
-                        
-                        // End background task when complete
-                        if self.backgroundTaskID != .invalid {
-                            UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                            self.backgroundTaskID = .invalid
-                        }
-                    }
-                }.resume()
-            } else {
-                // No artwork URL or failed to parse URL, update without artwork
-                print("[FORENSIC] Setting MPNowPlayingInfoCenter (no artwork): \(nowPlayingInfo)")
-                // Always set a fresh, complete dictionary atomically
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-                print("[FORENSIC] MPNowPlayingInfoCenter set (no artwork, atomic update)")
-                
-                // Verify the update worked properly
-                self.verifyMetadataUpdateSucceeded(expectedTitle: meta.title, expectedArtist: meta.artist)
-                
-                // End background task when complete
-                if self.backgroundTaskID != .invalid {
-                    UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                    self.backgroundTaskID = .invalid
-                }
-            }
-        }
     }
 
     

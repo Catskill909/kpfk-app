@@ -12,7 +12,7 @@ import AVFoundation
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowAirPlay])
+            try session.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP, .allowAirPlay])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
             print("[AUDIO] Session configured with enhanced options")
         } catch {

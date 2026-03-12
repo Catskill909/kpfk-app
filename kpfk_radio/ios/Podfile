@@ -47,6 +47,11 @@ post_install do |installer|
         'PERMISSION_MICROPHONE=1',
         'PERMISSION_NOTIFICATIONS=1'
       ]
+      # Remove duplicate linker flags (fixes: Ignoring duplicate libraries '-lswiftCoreGraphics')
+      ldflags = config.build_settings['OTHER_LDFLAGS']
+      if ldflags.is_a?(Array)
+        config.build_settings['OTHER_LDFLAGS'] = ldflags.uniq
+      end
     end
   end
 end
