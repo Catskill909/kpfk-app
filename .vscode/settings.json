@@ -1,5 +1,8 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.server.launchMode": "LightWeight",
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "java.import.gradle.enabled": false,
+    "java.autobuild.enabled": false,
     "intelephense.diagnostics.enable": false,
     "php.validate.enable": false
 }
