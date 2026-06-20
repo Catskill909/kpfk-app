@@ -216,16 +216,20 @@ class _HomePageState extends State<HomePage> {
               final dir = Directionality.of(context);
               switch (state.playbackState) {
                 case StreamState.playing:
-                  SemanticsService.announce('Playing KPFK stream', dir);
+                  SemanticsService.sendAnnouncement(
+                      View.of(context), 'Playing KPFK stream', dir);
                   break;
                 case StreamState.paused:
-                  SemanticsService.announce('Stream stopped and reset', dir);
+                  SemanticsService.sendAnnouncement(
+                      View.of(context), 'Stream stopped and reset', dir);
                   break;
                 case StreamState.loading:
-                  SemanticsService.announce('Loading audio', dir);
+                  SemanticsService.sendAnnouncement(
+                      View.of(context), 'Loading audio', dir);
                   break;
                 case StreamState.buffering:
-                  SemanticsService.announce('Buffering audio', dir);
+                  SemanticsService.sendAnnouncement(
+                      View.of(context), 'Buffering audio', dir);
                   break;
                 case StreamState.error:
                   // error announcement happens below via error message if present
@@ -246,7 +250,7 @@ class _HomePageState extends State<HomePage> {
               final msg = hasSong
                   ? 'Now playing ${state.metadata!.current.songTitle} by ${state.metadata!.current.songArtist} on ${state.metadata!.current.showName}'
                   : 'Now playing ${state.metadata!.current.showName}';
-              SemanticsService.announce(msg, dir);
+              SemanticsService.sendAnnouncement(View.of(context), msg, dir);
             }
 
             if (state.errorMessage != null) {
@@ -266,7 +270,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               // Announce error message for screen readers
-              SemanticsService.announce(
+              SemanticsService.sendAnnouncement(View.of(context),
                   state.errorMessage!, Directionality.of(context));
             }
           },

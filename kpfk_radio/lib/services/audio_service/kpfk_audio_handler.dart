@@ -169,7 +169,14 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _currentMediaItem != null &&
         (_currentMediaItem!.title != "KPFK 90.7 FM" || _player.playing);
 
-    mediaItem.add(shouldShowPlayer ? _currentMediaItem : null);
+    if (Platform.isIOS && _currentMediaItem != null) {
+      // iOS LOCK-SCREEN FIX: Never push null during state transitions (e.g. a
+      // brief idle while resuming) — that lets another app's metadata flash on
+      // the lock screen. Explicit stop() still calls mediaItem.add(null) directly.
+      mediaItem.add(_currentMediaItem);
+    } else {
+      mediaItem.add(shouldShowPlayer ? _currentMediaItem : null);
+    }
 
     LoggerService.info(
         '🎯 ONE TRUTH: _broadcastState called - MediaItem=${_currentMediaItem?.title}, playing=${_player.playing}, state=${_player.processingState}');
@@ -276,19 +283,25 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       LoggerService.info(
           '🎯 SAMSUNG FIX: Audio focus gained successfully - lockscreen controls should now work');
 
-      // CACHE FIX: ALWAYS set fresh AudioSource - never trust existing one
-      // This ensures every play button press behaves like app startup (fresh stream)
-      LoggerService.info(
-          '🎯 CACHE FIX: ALWAYS setting fresh AudioSource (no cache check)');
-      final directStreamUrl = await _resolveStreamUrl(_streamUrl);
-      await _player.setAudioSource(
-        AudioSource.uri(
-          Uri.parse(directStreamUrl),
-          tag: _currentMediaItem,
-        ),
-      );
-      LoggerService.info(
-          '🎯 CACHE FIX: Fresh AudioSource set - guaranteed no cached audio');
+      // iOS LOCK-SCREEN FIX: Do NOT force a fresh AudioSource on every play().
+      // setAudioSource destroys the iOS AVPlayerItem, which drops Now Playing and
+      // lets another app's metadata flash on the lock screen during the gap. On
+      // iOS we just resume the existing (paused) player; if the buffer is stale
+      // it throws and the catch below calls _reconnect() to recover.
+      // Android keeps the fresh-source "cache fix" behavior unchanged.
+      if (!Platform.isIOS) {
+        LoggerService.info(
+            '🎯 CACHE FIX: ALWAYS setting fresh AudioSource (no cache check)');
+        final directStreamUrl = await _resolveStreamUrl(_streamUrl);
+        await _player.setAudioSource(
+          AudioSource.uri(
+            Uri.parse(directStreamUrl),
+            tag: _currentMediaItem,
+          ),
+        );
+        LoggerService.info(
+            '🎯 CACHE FIX: Fresh AudioSource set - guaranteed no cached audio');
+      }
 
       LoggerService.info(
           '🎯 ONE TRUTH: Calling _player.play() - event listener will trigger _broadcastState');
@@ -342,10 +355,16 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // REMOVED: Manual _broadcastState call - this was causing oscillation
       // The event listener will handle state broadcasting automatically
 
-      // CRITICAL: Release audio focus when pausing (Samsung requirement)
-      final session = await AudioSession.instance;
-      await session.setActive(false);
-      LoggerService.info('🎯 SAMSUNG FIX: Audio focus released on pause');
+      // iOS LOCK-SCREEN FIX: Do NOT release the audio session on iOS pause.
+      // Keeping it active makes iOS keep this app as the "Now Playing" app,
+      // preventing another app's metadata from flashing on the lock screen
+      // during the pause→play reconnect gap.
+      // Android still releases focus (Samsung requirement).
+      if (!Platform.isIOS) {
+        final session = await AudioSession.instance;
+        await session.setActive(false);
+        LoggerService.info('🎯 SAMSUNG FIX: Audio focus released on pause');
+      }
 
       // CRITICAL: Use our dummy MediaItem to update playback state only
       // Our Swift implementation will handle the lockscreen metadata

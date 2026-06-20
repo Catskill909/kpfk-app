@@ -15,6 +15,7 @@
 | **Phase 3A** | Suppress linker warning + Pods recommended settings | ✅ **DONE** (linker flag in Podfile + project.pbxproj; Pods settings = Xcode manual step) |
 | **Phase 3B** | Upgrade `url_launcher` and `flutter_native_splash` | ✅ **DONE** (`flutter_native_splash` upgraded to 2.4.7; `url_launcher_ios` 6.4.x needs newer Flutter SDK — unfixable) |
 | **Phase 3C** | Upgrade `flutter_inappwebview` | 🔲 Pending (risky — beta) |
+| **Phase 5** | Missing `objective_c.framework` dSYM on upload | ✅ **DONE** (build phase generates it during archive) |
 | **Unfixable** | `audio_service` deprecated API | ❌ Awaiting upstream author |
 
 ---
@@ -179,6 +180,46 @@ This hides the warnings but does not fix the underlying code.
 1. **Wait** for the author to release a fix (most practical)
 2. **Fork** the package and patch the one line (overkill for a cosmetic warning)
 3. **Suppress** with Podfile per-target `GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS = NO` (hides it)
+
+---
+
+## COMPLETED — Phase 5: Missing `objective_c.framework` dSYM (App Store upload)
+
+**Warning (App Store Connect, on upload):**
+> The archive did not include a dSYM for the objective_c.framework with the UUIDs
+> [60CB480A-3C19-372C-87AE-6F5B97FB4CC2]. Ensure that the archive's dSYM folder
+> includes a DWARF file for objective_c.framework with the expected UUIDs.
+
+**Root cause:**
+- `objective_c` (v9.3.0) is a transitive dependency of `path_provider_foundation`.
+- It is **not** a CocoaPod. It ships native Obj-C/C source compiled by Dart's
+  **native-assets build hook** (`hook/build.dart`), which produces `objective_c.dylib`
+  → wrapped into `objective_c.framework` and embedded in the app.
+- Because Xcode never compiles it, Xcode never emits a dSYM for it, so the archive's
+  `dSYMs/` folder is missing it. (The hook also compiles without `-g`, so the binary
+  has no DWARF — confirmed via `dwarfdump --debug-info`.)
+- This is a **non-blocking** warning: the build still uploads and processes. The dSYM
+  only matters for symbolicating crashes *inside that FFI framework*.
+
+**Fix (chosen):** auto-generate the dSYM during archive.
+- New script: [`ios/scripts/generate_native_asset_dsyms.sh`](../ios/scripts/generate_native_asset_dsyms.sh)
+- New Runner build phase **"Generate Native-Asset dSYMs"** (last phase, after Embed
+  Pods Frameworks) calls it.
+- The script is **surgical**: it only processes frameworks present in
+  `build/native_assets/ios/` (just `objective_c.framework` today), runs `dsymutil` on
+  the *embedded* binary so the UUID matches, and writes into `$DWARF_DSYM_FOLDER_PATH`.
+  It skips any framework that already has a dSYM (so `App.framework`'s Dart AOT symbols
+  and `Flutter.framework` are never touched), runs only on archive builds
+  (`DWARF_DSYM_FOLDER_PATH` set), and is idempotent.
+
+**Verified:** dry-run against a built `Runner.app` generates only `objective_c.framework.dSYM`
+with a UUID exactly matching the embedded binary; re-run skips.
+
+**Caveat:** since the native-asset binary has no `-g` debug info, the generated dSYM
+carries the matching UUID (which is what silences the warning) but has no source-level
+symbols. That is a Flutter native-assets limitation, not a project issue. If a future
+Flutter release ships dSYMs for native assets directly, this phase can be removed (it
+no-ops anyway once a dSYM already exists).
 
 ---
 

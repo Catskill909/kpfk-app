@@ -201,6 +201,7 @@
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				ABE976857AA9D7DE1637116D /* [CP] Embed Pods Frameworks */,
+				BBCC0011DDEE2233FF445566 /* Generate Native-Asset dSYMs */,
 			);
 			buildRules = (
 			);
@@ -363,6 +364,21 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		BBCC0011DDEE2233FF445566 /* Generate Native-Asset dSYMs */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate Native-Asset dSYMs";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/generate_native_asset_dsyms.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

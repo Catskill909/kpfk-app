@@ -260,9 +260,12 @@ class StreamRepository {
       LoggerService.info(
           '🎵 StreamRepository: Pause requested - SPOTIFY SIMPLE APPROACH');
 
-      // SPOTIFY SIMPLE: Just stop the audio handler - that's it
-      await _audioHandler.stop();
-      _updateState(StreamState.initial);
+      // iOS LOCK-SCREEN FIX: Use pause() instead of stop() to keep the audio
+      // session active and preserve Now Playing status on iOS. stop() was
+      // nuking mediaItem and deactivating the session, which let another app's
+      // metadata flash on the lock screen during the next play→reconnect gap.
+      await _audioHandler.pause();
+      _updateState(StreamState.paused);
 
       LoggerService.info(
           '🎵 StreamRepository: Pause completed - simple stop, ready for fresh start');

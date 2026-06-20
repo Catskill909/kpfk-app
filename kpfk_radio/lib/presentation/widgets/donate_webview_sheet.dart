@@ -63,7 +63,7 @@ class _DonateWebViewSheetState extends State<DonateWebViewSheet> {
                   setState(() => _progress = progress / 100);
                   if (_progress >= 1.0 && !_announcedLoaded) {
                     _announcedLoaded = true;
-                    SemanticsService.announce(
+                    SemanticsService.sendAnnouncement(View.of(context),
                         'Donate page loaded', Directionality.of(context));
                   }
                 },
@@ -88,13 +88,15 @@ class _DonateWebViewSheetState extends State<DonateWebViewSheet> {
     final isSameDomain = uri.host.endsWith('docs.pacifica.org');
 
     if (!isHttp || !isSameDomain) {
-      // Capture text direction before awaiting to avoid using context across async gaps
+      // Capture text direction and view before awaiting to avoid using context across async gaps
       final textDirection = Directionality.of(context);
+      final view = View.of(context);
       final supported = await canLaunchUrl(uri);
       if (!mounted) return NavigationActionPolicy.CANCEL;
       if (supported) {
         // Announce opening external browser for accessibility
-        SemanticsService.announce('Opening external browser', textDirection);
+        SemanticsService.sendAnnouncement(
+            view, 'Opening external browser', textDirection);
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
       return NavigationActionPolicy.CANCEL;
