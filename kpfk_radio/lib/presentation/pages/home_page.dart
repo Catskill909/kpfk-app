@@ -277,154 +277,148 @@ class _HomePageState extends State<HomePage> {
           builder: (context, state) {
             return Stack(
               children: [
-                // Main content
+                // Main content — locked (non-scrolling), vertically centered.
+                // The logo lives in a Flexible/AspectRatio so it shrinks to
+                // whatever vertical space remains after the text + play button,
+                // keeping the layout stable and fitting very small screens.
                 Positioned.fill(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.only(
-                        bottom: 100), // Add padding for bottom buttons
-                    child: Column(
-                      children: [
-                        Container(
-                          width: MediaQuery.of(context).size.width,
-                          padding: EdgeInsets.symmetric(
-                              horizontal: _isSmallPhone(context) ? 12.0 : 16.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Station Logo - tap to show info
-                              GestureDetector(
-                                onTap: state.metadata != null
-                                    ? () {
-                                        setState(() {
-                                          _showInfoModal = true;
-                                        });
-                                      }
-                                    : null,
-                                child: Container(
-                                  width: MediaQuery.of(context).size.width *
-                                      (_isSmallPhone(context)
-                                          ? 0.8
-                                          : (MediaQuery.of(context)
-                                                      .size
-                                                      .shortestSide >
-                                                  600
-                                              ? 0.7
-                                              : 0.85)),
-                                  height: MediaQuery.of(context).size.width *
-                                      (_isSmallPhone(context)
-                                          ? 0.8
-                                          : (MediaQuery.of(context)
-                                                      .size
-                                                      .shortestSide >
-                                                  600
-                                              ? 0.7
-                                              : 0.85)),
-                                  margin: EdgeInsets.only(
-                                      top: _isSmallPhone(context) ? 12 : 20),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color:
-                                          const Color(0x1AFFFFFF), // ~10% white
-                                      width: MediaQuery.of(context)
-                                                  .size
-                                                  .shortestSide >
-                                              600
-                                          ? 1
-                                          : 2,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                            red: 0,
-                                            green: 0,
-                                            blue: 0,
-                                            alpha: 77), // ~0.3 opacity
-                                        blurRadius: 8,
-                                        offset: const Offset(2, 2),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final mq = MediaQuery.of(context).size;
+                      final bool small = _isSmallPhone(context);
+                      final bool isTablet = mq.shortestSide > 600;
+                      // Logo a touch larger on bigger screens / tablets.
+                      final double logoMaxWidth =
+                          mq.width * (small ? 0.8 : (isTablet ? 0.78 : 0.9));
+                      // Breathing room above the logo, scaled up on larger
+                      // screens and tablets (kept tight on small phones).
+                      final double topGap =
+                          small ? 8.0 : (isTablet ? 40.0 : 24.0);
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          left: small ? 12.0 : 16.0,
+                          right: small ? 12.0 : 16.0,
+                          // Reserve room for the floating bottom buttons.
+                          bottom: small ? 80.0 : 90.0,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(height: topGap),
+                            // Station Logo - tap to show info.
+                            // Flexible + AspectRatio => shrinks to fit height.
+                            Flexible(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      maxWidth: logoMaxWidth),
+                                  child: AspectRatio(
+                                    aspectRatio: 1,
+                                    child: GestureDetector(
+                                      onTap: state.metadata != null
+                                          ? () {
+                                              setState(() {
+                                                _showInfoModal = true;
+                                              });
+                                            }
+                                          : null,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: const Color(
+                                                0x1AFFFFFF), // ~10% white
+                                            width: isTablet ? 1 : 2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                  red: 0,
+                                                  green: 0,
+                                                  blue: 0,
+                                                  alpha: 77), // ~0.3 opacity
+                                              blurRadius: 8,
+                                              offset: const Offset(2, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          child: state.metadata?.current
+                                                      .hasHostImage ==
+                                                  true
+                                              ? Image.network(
+                                                  state.metadata!.current
+                                                      .hostImage!,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error,
+                                                          stackTrace) =>
+                                                      _buildLoadingContainer(
+                                                          'Error loading image'),
+                                                )
+                                              : _buildLoadingContainer(
+                                                  'Loading stream information...'),
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: state.metadata?.current
-                                                .hasHostImage ==
-                                            true
-                                        ? Image.network(
-                                            state.metadata!.current.hostImage!,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) =>
-                                                    _buildLoadingContainer(
-                                                        'Error loading image'),
-                                          )
-                                        : _buildLoadingContainer(
-                                            'Loading stream information...'),
+                                    ),
                                   ),
                                 ),
                               ),
-                              // Show Information
-                              if (state.metadata != null) ...[
-                                SizedBox(
-                                    height: _isSmallPhone(context) ? 16 : 20),
+                            ),
+                            // Show Information
+                            if (state.metadata != null) ...[
+                              SizedBox(height: small ? 12 : 20),
+                              Text(
+                                state.metadata!.current.showName,
+                                style: AppTextStyles.showTitleForDevice(mq),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                state.metadata!.current.time,
+                                style: AppTextStyles.showTimeForDevice(mq),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (state.metadata!.current.hasSongInfo) ...[
+                                SizedBox(height: small ? 8 : 10),
                                 Text(
-                                  state.metadata!.current.showName,
-                                  style: AppTextStyles.showTitleForDevice(
-                                      MediaQuery.of(context).size),
+                                  'Song: ${state.metadata!.current.songTitle} - ${state.metadata!.current.songArtist}',
+                                  style: AppTextStyles.bodyLargeForDevice(mq),
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                              ] else if (state
+                                  .metadata!.next.showName.isNotEmpty) ...[
+                                SizedBox(height: small ? 8 : 10),
                                 Text(
-                                  state.metadata!.current.time,
-                                  style: AppTextStyles.showTimeForDevice(
-                                      MediaQuery.of(context).size),
+                                  'Next: ${state.metadata!.next.showName}',
+                                  style: AppTextStyles.bodyMediumForDevice(mq),
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                ),
-                                if (state.metadata!.current.hasSongInfo) ...[
-                                  SizedBox(
-                                      height: _isSmallPhone(context) ? 8 : 10),
-                                  Text(
-                                    'Song: ${state.metadata!.current.songTitle} - ${state.metadata!.current.songArtist}',
-                                    style: AppTextStyles.bodyLargeForDevice(
-                                        MediaQuery.of(context).size),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ] else if (state
-                                    .metadata!.next.showName.isNotEmpty) ...[
-                                  SizedBox(
-                                      height: _isSmallPhone(context) ? 8 : 10),
-                                  Text(
-                                    'Next: ${state.metadata!.next.showName}',
-                                    style: AppTextStyles.bodyMediumForDevice(
-                                        MediaQuery.of(context).size),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ] else ...[
-                                const SizedBox(height: 20),
-                                Text(
-                                  'Loading stream information...',
-                                  style: AppTextStyles.bodyMedium,
-                                  textAlign: TextAlign.center,
                                 ),
                               ],
+                            ] else ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                'Loading stream information...',
+                                style: AppTextStyles.bodyMedium,
+                                textAlign: TextAlign.center,
+                              ),
                             ],
-                          ),
-                        ),
-                        // Playback Control with Loading State
-                        Container(
-                          alignment: Alignment.center,
-                          margin: EdgeInsets.symmetric(
-                              vertical: _isSmallPhone(context) ? 24.0 : 32.0),
-                          child: Semantics(
+                            // Playback Control with Loading State
+                            Container(
+                              alignment: Alignment.center,
+                              margin: EdgeInsets.symmetric(
+                                  vertical: small ? 20.0 : 28.0),
+                              child: Semantics(
                             button: true,
                             enabled: true,
                             label: _showLocalLoading
@@ -587,9 +581,11 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                           ),
-                        ],
-                      ],
-                    ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
 
