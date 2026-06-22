@@ -25,6 +25,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _showLocalLoading = false;
+  // Becomes true once a play attempt has reached an in-progress state
+  // (connecting/loading/buffering). Used so the spinner only clears on a
+  // *settled* state (paused/stopped/initial) AFTER real progress — never on
+  // the transient old-state emit that fires right when play is dispatched.
+  bool _sawPlaybackProgress = false;
   bool _userPressedPause = false; // Track when user pressed pause button
   bool _showInfoModal = false; // Track info modal visibility
 
@@ -182,20 +187,36 @@ class _HomePageState extends State<HomePage> {
             LoggerService.debug(
                 '🔄 SPINNER: State changed to ${state.playbackState}, _showLocalLoading: $_showLocalLoading');
 
-            // SPINNER FIX: Only clear spinner when audio actually starts playing or on error
-            // Keep spinner during connecting, loading, and buffering states
-            if (_showLocalLoading &&
-                (state.playbackState == StreamState.playing ||
-                    state.playbackState == StreamState.error)) {
-              LoggerService.debug(
-                  '🔄 SPINNER: Clearing spinner - state is ${state.playbackState}');
-              setState(() {
-                _showLocalLoading = false;
-              });
-              _cancelSpinnerTimeout();
-            } else if (_showLocalLoading) {
-              LoggerService.debug(
-                  '🔄 SPINNER: Keeping spinner - state is ${state.playbackState}');
+            // SPINNER FIX: Clear the spinner once playback settles, so it never
+            // outlives the play attempt. We keep it during the in-progress
+            // states (connecting/loading/buffering) and only treat a settled
+            // state (paused/stopped/initial) as "done" after we've actually
+            // seen progress — otherwise the transient old-state emit that fires
+            // the moment play is dispatched would clear the spinner too early.
+            if (_showLocalLoading) {
+              final s = state.playbackState;
+              final inProgress = s == StreamState.connecting ||
+                  s == StreamState.loading ||
+                  s == StreamState.buffering;
+              if (inProgress) {
+                _sawPlaybackProgress = true;
+                LoggerService.debug(
+                    '🔄 SPINNER: Keeping spinner - in-progress state is $s');
+              } else if (s == StreamState.playing ||
+                  s == StreamState.error ||
+                  _sawPlaybackProgress) {
+                // playing/error are definitive; paused/stopped/initial only
+                // count once a real attempt has been observed.
+                LoggerService.debug('🔄 SPINNER: Clearing spinner - state is $s');
+                setState(() {
+                  _showLocalLoading = false;
+                });
+                _sawPlaybackProgress = false;
+                _cancelSpinnerTimeout();
+              } else {
+                LoggerService.debug(
+                    '🔄 SPINNER: Keeping spinner - awaiting progress (state $s)');
+              }
             }
 
             // NETWORK RECOVERY: Don't interfere with spinner during legitimate loading
@@ -465,6 +486,7 @@ class _HomePageState extends State<HomePage> {
                                               '🔄 SPINNER: Play button pressed, current state: ${state.playbackState}');
                                           setState(() {
                                             _showLocalLoading = true;
+                                            _sawPlaybackProgress = false;
                                             _userPressedPause = false;
                                           });
                                           LoggerService.debug(

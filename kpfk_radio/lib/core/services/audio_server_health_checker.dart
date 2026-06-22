@@ -8,9 +8,14 @@ import 'logger_service.dart';
 class AudioServerHealthChecker {
   static final Dio _dio = Dio();
   static const Duration _healthCheckTimeout = Duration(seconds: 5);
-  static const Duration _cacheTimeout = Duration(seconds: 30);
+  // Only successful results are cached, and only briefly. Failures are NEVER
+  // cached: a single failed check (e.g. a cold radio after resuming from
+  // background) used to poison this static cache for 30s and make every
+  // subsequent play return "unhealthy" until the process was killed — the
+  // "needs reboot" bug. See play-button-fix.md Phase 1.
+  static const Duration _cacheTimeout = Duration(seconds: 5);
 
-  // Cache to prevent excessive health checks
+  // Cache to prevent excessive health checks (success-only).
   static DateTime? _lastHealthCheck;
   static bool? _lastHealthResult;
 
@@ -28,18 +33,17 @@ class AudioServerHealthChecker {
   static Future<AudioServerHealthResult> checkServerHealth(
       String streamUrl) async {
     try {
-      // Check cache first to prevent excessive requests
-      if (_lastHealthCheck != null && _lastHealthResult != null) {
+      // Check cache first to prevent excessive requests.
+      // ONLY positive (healthy) results are cached — never failures — so a
+      // transient failure can't lock out playback. See play-button-fix.md.
+      if (_lastHealthCheck != null && _lastHealthResult == true) {
         final timeSinceLastCheck = DateTime.now().difference(_lastHealthCheck!);
         if (timeSinceLastCheck < _cacheTimeout) {
           LoggerService.info(
-              '🏥 AudioServerHealthChecker: Using cached result: $_lastHealthResult');
-          return AudioServerHealthResult(
-            isHealthy: _lastHealthResult!,
-            errorType: _lastHealthResult!
-                ? null
-                : AudioServerErrorType.serverUnavailable,
-            statusCode: _lastHealthResult! ? 200 : null,
+              '🏥 AudioServerHealthChecker: Using cached healthy result');
+          return const AudioServerHealthResult(
+            isHealthy: true,
+            statusCode: 200,
           );
         }
       }
@@ -66,12 +70,10 @@ class AudioServerHealthChecker {
       LoggerService.info(
           '🏥 AudioServerHealthChecker: Server responded with status: $statusCode');
 
-      // Cache the result
-      _lastHealthCheck = DateTime.now();
-
       // Analyze response
       if (statusCode >= 200 && statusCode < 300) {
-        // Server is healthy
+        // Server is healthy — cache ONLY this positive result.
+        _lastHealthCheck = DateTime.now();
         _lastHealthResult = true;
         return AudioServerHealthResult(
           isHealthy: true,
@@ -79,7 +81,6 @@ class AudioServerHealthChecker {
         );
       } else if (statusCode == 404) {
         // Stream not found
-        _lastHealthResult = false;
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.streamNotFound,
@@ -88,7 +89,6 @@ class AudioServerHealthChecker {
         );
       } else if (statusCode == 503) {
         // Server overloaded
-        _lastHealthResult = false;
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.serverOverloaded,
@@ -97,7 +97,6 @@ class AudioServerHealthChecker {
         );
       } else if (statusCode >= 400 && statusCode < 500) {
         // Client error (auth, forbidden, etc.)
-        _lastHealthResult = false;
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.authenticationError,
@@ -106,7 +105,6 @@ class AudioServerHealthChecker {
         );
       } else {
         // Other server error
-        _lastHealthResult = false;
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.serverError,
@@ -125,18 +123,14 @@ class AudioServerHealthChecker {
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout) {
-        // Timeout - could be server or network
-        _lastHealthResult = false;
-        _lastHealthCheck = DateTime.now();
+        // Timeout - could be server or network. Do NOT cache (transient).
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.connectionTimeout,
           message: 'Connection to server timed out',
         );
       } else if (e.type == DioExceptionType.connectionError) {
-        // Connection refused - server is down
-        _lastHealthResult = false;
-        _lastHealthCheck = DateTime.now();
+        // Connection refused - server is down. Do NOT cache (transient).
         return AudioServerHealthResult(
           isHealthy: false,
           errorType: AudioServerErrorType.serverUnavailable,
@@ -149,8 +143,7 @@ class AudioServerHealthChecker {
     } catch (e) {
       LoggerService.audioError(
           '🏥 AudioServerHealthChecker: Unexpected error', e);
-      _lastHealthResult = false;
-      _lastHealthCheck = DateTime.now();
+      // Do NOT cache unexpected failures (transient).
       return AudioServerHealthResult(
         isHealthy: false,
         errorType: AudioServerErrorType.unknownError,

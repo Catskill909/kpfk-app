@@ -13,7 +13,13 @@ class ConnectivityService {
   final Dio _dio;
 
   static const String _probeUrl = 'https://www.google.com/generate_204';
-  static const Duration _timeout = Duration(milliseconds: 1500);
+  // A freshly re-enabled radio (e.g. just after Airplane Mode off) needs a
+  // moment to actually route traffic. A single short probe gives a false
+  // "offline" that latches until the next transport change — which may never
+  // come. So the probe is given a slightly longer timeout AND retried.
+  static const Duration _timeout = Duration(milliseconds: 3000);
+  static const int _probeAttempts = 3;
+  static const Duration _probeRetryGap = Duration(milliseconds: 800);
 
   ConnectivityService({Dio? dio}) : _dio = dio ?? Dio() {
     _dio.options.connectTimeout = _timeout;
@@ -38,9 +44,24 @@ class ConnectivityService {
   }
 
   /// Returns true if the device has internet reachability.
+  /// Retries a few times so a cold radio doesn't produce a false negative
+  /// that latches the app into the offline modal.
   Future<bool> hasInternet() async {
+    for (var attempt = 1; attempt <= _probeAttempts; attempt++) {
+      if (await _probeOnce(attempt)) return true;
+      if (attempt < _probeAttempts) {
+        await Future.delayed(_probeRetryGap);
+      }
+    }
+    LoggerService.info(
+        '[Connectivity] All $_probeAttempts probes failed => offline');
+    return false;
+  }
+
+  /// A single internet reachability probe.
+  Future<bool> _probeOnce(int attempt) async {
     try {
-      LoggerService.debug('[Connectivity] Probing internet...');
+      LoggerService.debug('[Connectivity] Probing internet (attempt $attempt)...');
       final res = await _dio.head(
         _probeUrl,
         options: Options(
@@ -49,10 +70,11 @@ class ConnectivityService {
       );
       // Accept 204/200/3xx as reachable
       final ok = res.statusCode == 204 || (res.statusCode ?? 0) >= 200;
-      LoggerService.info('[Connectivity] Probe result code=${res.statusCode} => online=$ok');
+      LoggerService.info(
+          '[Connectivity] Probe attempt $attempt code=${res.statusCode} => online=$ok');
       return ok;
     } catch (_) {
-      LoggerService.info('[Connectivity] Probe failed => offline');
+      LoggerService.info('[Connectivity] Probe attempt $attempt failed');
       return false;
     }
   }

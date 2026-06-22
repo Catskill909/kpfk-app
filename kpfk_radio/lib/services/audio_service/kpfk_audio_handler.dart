@@ -26,6 +26,12 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // ANDROID: throttle diagnostic logs
   DateTime? _lastAndroidDiag;
 
+  // PHASE 5: Gate the background reconnect loop. When the server is confirmed
+  // down (by the repository's connecting watchdog), we halt reconnects so the
+  // app isn't silently hammering a dead server behind the error modal. A fresh
+  // play() re-enables it.
+  bool _reconnectEnabled = true;
+
   KPFKAudioHandler._(
     this._player,
     this._streamUrl,
@@ -236,7 +242,21 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     LoggerService.audioError('Audio error', error);
   }
 
+  /// PHASE 5: Stop the background reconnect loop. Called by the repository
+  /// once the server is confirmed down, so we don't keep retrying behind the
+  /// error modal. Re-enabled by the next play().
+  void haltReconnect() {
+    if (_reconnectEnabled) {
+      LoggerService.info('🎵 Reconnect loop halted (server confirmed down)');
+    }
+    _reconnectEnabled = false;
+  }
+
   Future<void> _reconnect() async {
+    if (!_reconnectEnabled) {
+      LoggerService.info('🎵 Reconnect skipped - loop is halted');
+      return;
+    }
     try {
       LoggerService.info('🎵 Attempting to reconnect to stream...');
 
@@ -258,9 +278,9 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       LoggerService.audioError('Error during reconnection', e);
       _handleError(e);
 
-      // Schedule another reconnect attempt
+      // Schedule another reconnect attempt (unless halted in the meantime)
       Future.delayed(const Duration(seconds: 5), () {
-        if (!_player.playing) {
+        if (_reconnectEnabled && !_player.playing) {
           _reconnect();
         }
       });
@@ -271,6 +291,10 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> play() async {
     try {
       LoggerService.info('🎯 ONE TRUTH: Play button pressed - starting flow');
+
+      // PHASE 5: a fresh play attempt re-enables the reconnect loop that a
+      // prior server-down may have halted.
+      _reconnectEnabled = true;
 
       // CRITICAL: Request audio focus before playing (Samsung requirement)
       final session = await AudioSession.instance;
