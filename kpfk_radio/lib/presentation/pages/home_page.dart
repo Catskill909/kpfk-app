@@ -274,7 +274,7 @@ class _HomePageState extends State<HomePage> {
               SemanticsService.sendAnnouncement(View.of(context), msg, dir);
             }
 
-            if (state.errorMessage != null) {
+            if (state.errorMessage != null && !state.showServerErrorModal) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(

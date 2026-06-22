@@ -163,6 +163,28 @@ Not needed for the current bug (Phase 6 already recovers reliably per device obs
 
 ---
 
+## Icecast-down behavior (the original investigation)
+
+### Phase 9 — Detect a real Icecast outage + actually show the modal ✅ DONE
+**Files:** `lib/core/services/audio_server_health_checker.dart`, `lib/data/repositories/stream_repository.dart`, `lib/presentation/bloc/stream_bloc.dart`, `lib/presentation/pages/home_page.dart`
+
+**Two bugs found:**
+1. **Health check probed the wrong server.** `streamUrl` is `docs.pacifica.org/kpfk/kpfk.m3u` — a *playlist file*. The checker GET-ed the `.m3u` (returns 200 if the docs host is up) instead of the resolved Icecast mount (`streams.pacifica.org:9000`). So an Icecast outage with the docs host up read as "healthy" → no modal, silent dead play icon.
+2. **The server-error modal was unreachable.** The bloc's state bridge emitted `UpdatePlaybackState(error, isServerError:false)` and nothing ever set `isServerError`/`showServerErrorModal` true — so `AudioServerErrorModal` never rendered; users only got a generic error snackbar.
+
+**Fixes:**
+- ✅ `AudioServerHealthChecker` now resolves `.m3u` → direct stream URL (`_resolveDirectStreamUrl`, reuses `M3UParser`) and probes the **real Icecast endpoint**. If the playlist can't be fetched/parsed, that counts as `serverUnavailable`.
+- ✅ Repository gained a dedicated `serverErrorStream` (emits message on server error, `null` on clear). `_handleServerError` pushes to it; `clearServerError` clears it.
+- ✅ Bloc listens to it via a new `ServerErrorOccurred` event → sets `showServerErrorModal`. `_onUpdatePlaybackState` no longer clobbers an active server-error modal (the generic `error` bridge can't turn it off).
+- ✅ Home page suppresses the generic error snackbar while the server modal is up (modal only, no double-notify).
+- Flow: Icecast down → play → 8s watchdog probes the real mount → modal "Audio Server Unavailable" + halt reconnect; OK button dismisses, clears cache, resets to `initial` so play is immediately usable.
+
+**Known follow-ups (not yet done):**
+- Worst-case modal latency: 8s watchdog + up to ~8s probe (M3U fetch + Icecast probe timeouts) can push the modal past the 10s spinner timeout. Consider tightening probe timeouts or watchdog when tuning.
+- **Mid-stream server drop** (Icecast dies *while playing*) still rides the handler's reconnect loop and won't surface the modal — separate path, candidate for Phase 10.
+
+---
+
 ## Out of scope / verified-not-affected
 - BLoC events/state shape (`stream_bloc.dart`) — fine as-is.
 - Lock screen / `KPFKAudioHandler` / metadata services — untouched.
@@ -179,4 +201,6 @@ Not needed for the current bug (Phase 6 already recovers reliably per device obs
 - [x] Phase 5 — server-down UX (8s connecting watchdog + reconnect gate)
 - [x] Phase 6 — CRITICAL: offline modal latch (resilient probe + recovery poll)
 - [x] Phase 8 — CRITICAL: cold-reset audio on network recovery (just_audio iOS #1277)
+- [x] Phase 9 — Icecast-down: probe resolved mount + wire up server-error modal
 - [ ] Phase 7 — (deferred/optional) adopt internet_connection_checker_plus
+- [ ] Phase 10 — (future) mid-stream Icecast drop → surface modal

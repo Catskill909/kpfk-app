@@ -40,6 +40,10 @@ class StreamRepository {
 
   final _stateController = StreamController<StreamState>.broadcast();
   final _metadataController = StreamController<StreamMetadata>.broadcast();
+  // Emits a message when a server-specific error occurs (Icecast down, stream
+  // not found, etc.) and null when it's cleared. Drives the server-error modal,
+  // distinct from generic playback errors. See play-button-fix.md Phase 9.
+  final _serverErrorController = StreamController<String?>.broadcast();
 
   StreamState _currentState = StreamState.initial;
   StreamMetadata? _currentMetadata;
@@ -125,6 +129,7 @@ class StreamRepository {
   // Public streams
   Stream<StreamState> get stateStream => _stateController.stream;
   Stream<StreamMetadata> get metadataStream => _metadataController.stream;
+  Stream<String?> get serverErrorStream => _serverErrorController.stream;
 
   // Current values
   StreamState get currentState => _currentState;
@@ -515,6 +520,10 @@ class StreamRepository {
     // Update audio state manager
     AudioStateManager().handleServerError(audioState, errorMessage);
 
+    // Signal the UI to show the server-error modal (distinct from a generic
+    // playback error). The bloc maps this to showServerErrorModal.
+    _serverErrorController.add(errorMessage);
+
     // Update local stream state
     _updateState(StreamState.error);
   }
@@ -580,6 +589,7 @@ class StreamRepository {
     AudioStateManager().clearServerError();
     AudioServerHealthChecker
         .clearCache(); // Clear health check cache for fresh retry
+    _serverErrorController.add(null); // Hide the server-error modal
     _updateState(StreamState.initial);
   }
 
@@ -620,6 +630,7 @@ class StreamRepository {
     _playbackStateSubscription?.cancel();
     _stateController.close();
     _metadataController.close();
+    _serverErrorController.close();
     _metadataService.dispose();
     // Also dispose the native metadata service to clean up any active timers
     _nativeMetadataService.dispose();

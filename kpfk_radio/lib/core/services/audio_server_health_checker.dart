@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'logger_service.dart';
+import '../utils/m3u_parser.dart';
 
 /// Handles server health checking for audio streaming endpoints
 /// Distinguishes between network connectivity and server availability
@@ -49,13 +50,31 @@ class AudioServerHealthChecker {
       }
 
       _configureDio();
+
+      // Resolve M3U playlists to the DIRECT Icecast endpoint before probing.
+      // The stream URL is a .m3u file on the docs host; probing it only tells
+      // us the playlist host is up, not whether Icecast itself can serve audio.
+      // We must probe the real mount so an Icecast outage is actually detected.
+      final String probeUrl;
+      try {
+        probeUrl = await _resolveDirectStreamUrl(streamUrl);
+      } catch (e) {
+        LoggerService.audioError(
+            '🏥 AudioServerHealthChecker: Could not load stream playlist', e);
+        return const AudioServerHealthResult(
+          isHealthy: false,
+          errorType: AudioServerErrorType.serverUnavailable,
+          message: 'Audio server unavailable (could not load stream playlist)',
+        );
+      }
+
       LoggerService.info(
-          '🏥 AudioServerHealthChecker: Checking server health for: $streamUrl');
+          '🏥 AudioServerHealthChecker: Checking server health for: $probeUrl');
 
       // Use GET request instead of HEAD for Icecast/Shoutcast compatibility
       // Icecast servers return 400 for HEAD requests but 200 for GET
       final response = await _dio.get(
-        streamUrl,
+        probeUrl,
         options: Options(
           validateStatus: (status) => status != null && status < 500,
           responseType: ResponseType.stream, // Don't download the entire stream
@@ -150,6 +169,34 @@ class AudioServerHealthChecker {
         message: 'Unexpected error occurred',
       );
     }
+  }
+
+  /// Resolve an M3U playlist URL to its direct stream endpoint so health
+  /// checks probe the actual Icecast server. Non-.m3u URLs are returned as-is.
+  /// Throws if the playlist can't be fetched or contains no stream URL — the
+  /// caller treats that as "server unavailable".
+  static Future<String> _resolveDirectStreamUrl(String url) async {
+    if (!url.endsWith('.m3u')) return url;
+
+    LoggerService.info(
+        '🏥 AudioServerHealthChecker: Resolving M3U playlist: $url');
+    final res = await _dio.get<String>(
+      url,
+      options: Options(
+        responseType: ResponseType.plain,
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+    if ((res.statusCode ?? 0) != 200) {
+      throw Exception('Playlist returned status ${res.statusCode}');
+    }
+    final direct = M3UParser.parseStreamUrl(res.data ?? '');
+    if (direct == null) {
+      throw Exception('No stream URL found in M3U playlist');
+    }
+    LoggerService.info(
+        '🏥 AudioServerHealthChecker: Resolved direct stream: $direct');
+    return direct;
   }
 
   /// Clears the health check cache
