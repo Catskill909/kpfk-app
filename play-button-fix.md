@@ -179,9 +179,24 @@ Not needed for the current bug (Phase 6 already recovers reliably per device obs
 - ✅ Home page suppresses the generic error snackbar while the server modal is up (modal only, no double-notify).
 - Flow: Icecast down → play → 8s watchdog probes the real mount → modal "Audio Server Unavailable" + halt reconnect; OK button dismisses, clears cache, resets to `initial` so play is immediately usable.
 
+**Refinements (standardization pass):**
+- ✅ Removed the duct-tape `try/catch` that wrapped M3U resolution and flattened *every* failure to `serverUnavailable`. Resolution errors now propagate to the same SocketException/DioException classification as the mount probe, so DNS/no-network is reported as a network issue and a refused/timed-out host as a server issue (single classification point — standard).
+- ✅ Added `onError` to the handler's `playbackEventStream.listen(...)` — the documented just_audio pattern. Async playback errors (server dropping mid-stream, async load failure) were previously **unhandled**; they now trigger the gated reconnect.
+
+**Both outage cases confirmed handled:**
+- M3U/docs host down → `_resolveDirectStreamUrl` can't fetch the playlist → server-unavailable → modal.
+- Icecast mount down (docs host fine) → playlist resolves → probe to the mount refused/timed out → server-unavailable/timeout → modal.
+
 **Known follow-ups (not yet done):**
-- Worst-case modal latency: 8s watchdog + up to ~8s probe (M3U fetch + Icecast probe timeouts) can push the modal past the 10s spinner timeout. Consider tightening probe timeouts or watchdog when tuning.
-- **Mid-stream server drop** (Icecast dies *while playing*) still rides the handler's reconnect loop and won't surface the modal — separate path, candidate for Phase 10.
+- Worst-case modal latency: 8s watchdog + up to ~8s probe can push the modal past the 10s spinner timeout. Tighten probe timeouts/watchdog when tuning.
+- **Mid-stream server drop** (Icecast dies *while playing*) rides the reconnect loop. With `onError` wired it now reconnects, but it won't *surface the server modal* — the reconnect loop is silent/unbounded. See Phase 10.
+
+### Phase 10 — (proposed) Standard reconnect policy + mid-stream outage UX
+The 8s HTTP watchdog is pragmatic but exists only because the handler **swallows** connect errors (`play()` catch → `_reconnect()`, no rethrow), so the repository's own error path never runs. The more standard architecture:
+- Let the repository own error/reconnect *policy* and surface state, rather than the handler retrying forever silently.
+- For a radio app, persistent reconnect-with-backoff is expected — but it should reflect a "reconnecting…" state in the UI, and after sustained failure classify (health-check) and show the server modal.
+- That would make the watchdog a fallback, not the primary detector.
+This touches the production audio path, so propose/confirm before implementing.
 
 ---
 

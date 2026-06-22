@@ -55,18 +55,13 @@ class AudioServerHealthChecker {
       // The stream URL is a .m3u file on the docs host; probing it only tells
       // us the playlist host is up, not whether Icecast itself can serve audio.
       // We must probe the real mount so an Icecast outage is actually detected.
-      final String probeUrl;
-      try {
-        probeUrl = await _resolveDirectStreamUrl(streamUrl);
-      } catch (e) {
-        LoggerService.audioError(
-            '🏥 AudioServerHealthChecker: Could not load stream playlist', e);
-        return const AudioServerHealthResult(
-          isHealthy: false,
-          errorType: AudioServerErrorType.serverUnavailable,
-          message: 'Audio server unavailable (could not load stream playlist)',
-        );
-      }
+      //
+      // Resolution errors are NOT caught here on purpose — they propagate to
+      // the same SocketException/DioException classification below, so a DNS/
+      // no-network failure is reported as a network issue while a refused/timed-
+      // out playlist host is reported as a server issue. (Both the .m3u fetch
+      // and the mount probe are server endpoints, so either failing == down.)
+      final String probeUrl = await _resolveDirectStreamUrl(streamUrl);
 
       LoggerService.info(
           '🏥 AudioServerHealthChecker: Checking server health for: $probeUrl');

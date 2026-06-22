@@ -114,8 +114,14 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Set up event listeners
       _player.processingStateStream.listen(_handleProcessingState);
 
-      // WORKING PATTERN: Connect event streams like Pacifica app
-      _player.playbackEventStream.listen(_broadcastState);
+      // WORKING PATTERN: Connect event streams like Pacifica app.
+      // onError is the documented just_audio way to catch async playback
+      // errors (e.g. the server dropping the connection mid-stream, or an
+      // async load failure). Without it those errors are silently unhandled.
+      _player.playbackEventStream.listen(
+        _broadcastState,
+        onError: _handleStreamError,
+      );
       _player.playerStateStream.listen(_handlePlayerState);
 
       // ANDROID: deep diagnostics - observe handler streams
@@ -240,6 +246,16 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   void _handleError(dynamic error) {
     LoggerService.audioError('Audio error', error);
+  }
+
+  /// Handles async errors from the playback event stream (e.g. the server
+  /// dropping the connection mid-stream). Triggers the gated reconnect loop;
+  /// when reconnect has been halted (server confirmed down) we leave it alone.
+  void _handleStreamError(Object error, StackTrace stackTrace) {
+    LoggerService.audioError('Playback stream error', error);
+    if (_reconnectEnabled) {
+      _reconnect();
+    }
   }
 
   /// PHASE 5: Stop the background reconnect loop. Called by the repository
