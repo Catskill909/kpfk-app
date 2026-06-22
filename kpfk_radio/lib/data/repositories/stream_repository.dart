@@ -186,7 +186,10 @@ class StreamRepository {
             _updateState(StreamState.initial);
             break;
           case AudioProcessingState.error:
-            _updateState(StreamState.error);
+            // PHASE 10: the handler emits this after its bounded reconnect is
+            // exhausted (e.g. a mid-stream Icecast drop). Classify it so a real
+            // server outage surfaces the modal, not just a generic error.
+            _onPlayerError();
             break;
         }
 
@@ -253,6 +256,38 @@ class StreamRepository {
   void _cancelConnectingWatchdog() {
     _connectingWatchdog?.cancel();
     _connectingWatchdog = null;
+  }
+
+  // PHASE 10: guard against re-entrancy while classifying a player error
+  // (the classification itself drives more playback-state transitions).
+  bool _handlingPlayerError = false;
+
+  /// Classify a player error (reconnect exhausted) and surface it: a real
+  /// server outage shows the modal; anything else stays a generic error.
+  Future<void> _onPlayerError() async {
+    if (_handlingPlayerError) return;
+    _handlingPlayerError = true;
+    try {
+      _cancelConnectingWatchdog();
+      _updateState(StreamState.error);
+      LoggerService.warning(
+          '🎵 StreamRepository: Player error - probing server to classify');
+      final health = await AudioServerHealthChecker.checkServerHealth(
+          StreamConstants.streamUrl);
+      if (!health.isHealthy) {
+        LoggerService.info(
+            '🎵 StreamRepository: Player error is a server outage (${health.errorType}) - showing modal');
+        await _handleServerError(health);
+      }
+    } on NetworkConnectivityException catch (ne) {
+      // Network issue, not a server issue — leave as a generic error.
+      LoggerService.info(
+          '🎵 StreamRepository: Player error during network issue: $ne');
+    } catch (e) {
+      LoggerService.streamError('Error classifying player error', e);
+    } finally {
+      _handlingPlayerError = false;
+    }
   }
 
   Future<void> _onConnectingTimeout() async {

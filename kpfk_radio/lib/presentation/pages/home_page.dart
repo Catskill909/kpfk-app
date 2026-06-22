@@ -102,6 +102,13 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // PHASE 10: in-progress states where the play button should show a spinner
+  // even without a local tap — e.g. a background reconnect after a stream drop.
+  bool _isConnectingState(StreamState s) =>
+      s == StreamState.connecting ||
+      s == StreamState.loading ||
+      s == StreamState.buffering;
+
   IconData _getPlaybackIcon(StreamState state) {
     switch (state) {
       case StreamState.playing:
@@ -515,7 +522,9 @@ class _HomePageState extends State<HomePage> {
                                           ? 150.0
                                           : 120.0),
                                   child: Center(
-                                    child: _showLocalLoading
+                                    child: (_showLocalLoading ||
+                                            _isConnectingState(
+                                                state.playbackState))
                                         ? SizedBox(
                                             width: _isSmallPhone(context)
                                                 ? 38.0

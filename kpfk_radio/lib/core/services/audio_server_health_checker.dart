@@ -7,7 +7,11 @@ import '../utils/m3u_parser.dart';
 /// Handles server health checking for audio streaming endpoints
 /// Distinguishes between network connectivity and server availability
 class AudioServerHealthChecker {
-  static final Dio _dio = Dio();
+  static Dio _dio = Dio();
+
+  /// Test seam: inject a Dio with a mock adapter to exercise server-down paths
+  /// without a real network. Pair with [clearCache] between cases.
+  static void debugSetDio(Dio dio) => _dio = dio;
   static const Duration _healthCheckTimeout = Duration(seconds: 5);
   // Only successful results are cached, and only briefly. Failures are NEVER
   // cached: a single failed check (e.g. a cold radio after resuming from

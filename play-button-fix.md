@@ -191,12 +191,19 @@ Not needed for the current bug (Phase 6 already recovers reliably per device obs
 - Worst-case modal latency: 8s watchdog + up to ~8s probe can push the modal past the 10s spinner timeout. Tighten probe timeouts/watchdog when tuning.
 - **Mid-stream server drop** (Icecast dies *while playing*) rides the reconnect loop. With `onError` wired it now reconnects, but it won't *surface the server modal* — the reconnect loop is silent/unbounded. See Phase 10.
 
-### Phase 10 — (proposed) Standard reconnect policy + mid-stream outage UX
-The 8s HTTP watchdog is pragmatic but exists only because the handler **swallows** connect errors (`play()` catch → `_reconnect()`, no rethrow), so the repository's own error path never runs. The more standard architecture:
-- Let the repository own error/reconnect *policy* and surface state, rather than the handler retrying forever silently.
-- For a radio app, persistent reconnect-with-backoff is expected — but it should reflect a "reconnecting…" state in the UI, and after sustained failure classify (health-check) and show the server modal.
-- That would make the watchdog a fallback, not the primary detector.
-This touches the production audio path, so propose/confirm before implementing.
+### Phase 10 — Standard reconnect policy + mid-stream outage UX ✅ DONE
+**Files:** `lib/services/audio_service/kpfk_audio_handler.dart`, `lib/data/repositories/stream_repository.dart`, `lib/presentation/pages/home_page.dart`
+- ✅ **Bounded reconnect with backoff** (handler): `_reconnect()` now counts attempts and uses exponential backoff (`reconnectBackoff`: 2s, 4s, 8s, 16s, cap 30s) instead of a fixed 5s loop. After `_maxReconnectAttempts` (3) it stops and emits `AudioProcessingState.error`. Counter resets on a successful reconnect and on a fresh `play()`.
+- ✅ **Repository classifies player errors** (mid-stream drop path): the playback-state listener's `error` case now calls `_onPlayerError()`, which probes server health and shows the **server modal** for a real outage (or leaves a generic error for a network issue). Re-entrancy-guarded.
+- ✅ **Reconnecting UI**: the play button shows the spinner during `connecting`/`loading`/`buffering` even without a local tap (`_isConnectingState`), so a background reconnect is visible instead of looking paused.
+- The 8s connecting watchdog (Phase 5) remains as the connect-time detector; this adds the **mid-stream** path (server dies while playing → bounded reconnect → modal).
+
+## Terminal tests (no device / no server control needed)
+Server-down behavior is validated by mocking the HTTP layer, since we can't take the real M3U/Icecast servers down:
+- `test/m3u_parser_test.dart` — playlist URL extraction (incl. no-URL/empty).
+- `test/audio_server_health_checker_test.dart` — injects a fake Dio adapter (`AudioServerHealthChecker.debugSetDio`) to cover: healthy mount, **M3U host down**, **Icecast mount down**, mount 404 (streamNotFound), playlist-with-no-URL.
+- `test/reconnect_backoff_test.dart` — backoff curve + 30s cap.
+- Run: `flutter test` → 14 pass. The full-app `widget_test.dart` smoke test is `skip:true` (building the app needs audio_service/AudioSession platform channels — device/integration-test only; pre-existing limitation, was already failing against the old UI).
 
 ---
 
@@ -218,4 +225,5 @@ This touches the production audio path, so propose/confirm before implementing.
 - [x] Phase 8 — CRITICAL: cold-reset audio on network recovery (just_audio iOS #1277)
 - [x] Phase 9 — Icecast-down: probe resolved mount + wire up server-error modal
 - [ ] Phase 7 — (deferred/optional) adopt internet_connection_checker_plus
-- [ ] Phase 10 — (future) mid-stream Icecast drop → surface modal
+- [x] Phase 10 — mid-stream drop: bounded reconnect + backoff + classify → modal + reconnecting UI
+- [x] Terminal unit tests for server-down detection (M3U host down / Icecast down / backoff)
