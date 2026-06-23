@@ -2,7 +2,7 @@
 
 A Flutter-based radio streaming application for KPFK 90.7 FM with advanced features including background audio playback, lockscreen controls, sleep timer, and accessibility support.
 
-## Current Version: v1.0.0+2
+## Current Version: v1.0.1+7
 
 ### Recent Updates
 - Added custom typography using Google Fonts (Oswald & Poppins)
@@ -31,14 +31,13 @@ A Flutter-based radio streaming application for KPFK 90.7 FM with advanced featu
   - Powered by `just_audio`, `audio_service`, and `audio_session`.
   - ✅ iOS lockscreen controls and metadata integration fully operational.
   - ✅ Critical lockscreen bug resolved - all audio controls synchronized across app and system interfaces.
-  - 📖 **Complete system documentation**: [../AUDIO_METADATA_MASTER_REFERENCE.md](../AUDIO_METADATA_MASTER_REFERENCE.md)
+  - 📖 **Complete system documentation**: [docs/iOS_LOCKSCREEN_METADATA_MASTER.md](docs/iOS_LOCKSCREEN_METADATA_MASTER.md)
 
 - Advanced Sleep Timer (overlay)
   - Full-screen dark-themed overlay with presets (15/30/45/60m) and a minute slider.
   - Countdown, pause/resume, and cancel.
   - On completion: performs a cold-start audio reset (stop, dispose player, clear iOS lockscreen, return to idle) to avoid residual state.
   - Entry: Bottom-right Alarm button on `HomePage`.
-  - Docs: [timer.md](../timer.md)
   - Source: `lib/presentation/widgets/sleep_timer_overlay.dart`, `lib/presentation/bloc/sleep_timer_cubit.dart`
 
 - Donate Modal WebView
@@ -66,7 +65,6 @@ A Flutter-based radio streaming application for KPFK 90.7 FM with advanced featu
 
 - Accessibility baseline (Sep 5, 2025)
   - Screen-reader labels for core playback and donate flows, live announcements for playback states and errors.
-  - Plan and next steps documented in [accessibity.md](../accessibity.md).
 
 ### Resolved: iOS Lockscreen Metadata
 - Resolved: Stable lockscreen metadata and working remote controls on iOS.
@@ -113,7 +111,7 @@ High-level flow:
 ## Packages / Dependencies
 
 From `pubspec.yaml`:
-- Audio: `just_audio`, `audio_service`, `audio_session`, `radio_player` (experimental)
+- Audio: `just_audio`, `audio_service`, `audio_session`
 - WebView: `flutter_inappwebview`
 - State: `flutter_bloc`, `get_it`
 - Network/Storage: `dio`, `http`, `connectivity_plus`, `path_provider`, `shared_preferences`, `device_info_plus`, `url_launcher`

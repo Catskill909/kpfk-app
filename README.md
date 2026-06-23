@@ -41,8 +41,10 @@ kpfk-app/
 │   │   ├── data/            # Repositories, models
 │   │   ├── presentation/    # UI (pages, widgets, bloc)
 │   │   └── services/        # Audio, metadata services
+│   ├── docs/                # App-level documentation
 │   ├── pubspec.yaml         # Flutter dependencies
 │   └── README.md            # Detailed app documentation
+├── docs/                    # Project-level documentation
 ├── old-docs/                # Legacy documentation
 └── README.md                # This file
 ```
@@ -142,9 +144,11 @@ flutter doctor
 
 ## 📚 Additional Documentation
 
-- **QUICK-START.md** - Detailed setup and configuration guide
-- **FINAL-STATUS.md** - Project transformation status
+- **docs/QUICK-START.md** - Detailed setup and configuration guide
+- **docs/FINAL-STATUS.md** - Project transformation status
+- **docs/** - Project-level documentation and notes
 - **kpfk_radio/README.md** - In-depth app documentation
+- **kpfk_radio/docs/** - App-level documentation (architecture, lockscreen, platform notes)
 - **old-docs/** - Legacy documentation for reference
 
 ## 🛠️ Development
