@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/stream_constants.dart';
 import '../theme/font_constants.dart';
@@ -54,8 +55,14 @@ class AppDrawer extends StatelessWidget {
             onPressed: () => _launchUrl(StreamConstants.youtubeUrl),
           ),
           IconButton(
-            icon: Icon(Icons.message, size: iconSize, color: Colors.white),
-            tooltip: 'Twitter',
+            icon: SvgPicture.asset(
+              'assets/icons/x_logo.svg',
+              width: iconSize,
+              height: iconSize,
+              colorFilter:
+                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            ),
+            tooltip: 'X',
             onPressed: () => _launchUrl(StreamConstants.twitterUrl),
           ),
           IconButton(
