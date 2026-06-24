@@ -38,6 +38,21 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // play() re-enables it.
   bool _reconnectEnabled = true;
 
+  // ANDROID LOCK-SCREEN BLANK FIX: True while play() is rebuilding the audio
+  // source. setAudioSource() momentarily drops the player to ProcessingState.idle,
+  // which would otherwise make _broadcastState push mediaItem.add(null) and blank
+  // the notification/lock-screen to a placeholder (no art, no metadata) for ~95ms
+  // before recovering. While this flag is set we keep showing the current
+  // MediaItem through the transient idle. (iOS already never pushes null — this
+  // brings Android to parity without touching the iOS path.)
+  bool _rebuildingSource = false;
+
+  // ANDROID LOCK-SCREEN ART FLICKER FIX: signature of the last MediaItem pushed
+  // to the mediaItem stream, so _broadcastState can skip redundant identical
+  // pushes that otherwise force audio_service to re-decode + re-parcel the
+  // artwork bitmap on every state event (blanks the Samsung lock-screen image).
+  String? _lastPushedMediaSignature;
+
   // PHASE 10: bounded reconnect with backoff. A radio app should retry a
   // dropped stream, but not silently forever — after _maxReconnectAttempts we
   // surface an error state so the repository can classify it (server modal).
@@ -169,24 +184,37 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   // CRITICAL: EXACT working pattern from Pacifica app (SINGLE SOURCE OF TRUTH)
   void _broadcastState([PlaybackEvent? event]) {
+    // ANDROID LOCK-SCREEN BLANK — THE REAL CAUSE (proven by native logcat):
+    // play() rebuilds the source via setAudioSource(), which momentarily drops
+    // the player to ProcessingState.idle. Mapping that to AudioProcessingState.idle
+    // makes audio_service push MediaSession PlaybackState=STATE_NONE. Samsung's
+    // lock-screen widget (vol.MediaSessions) treats a NONE session as inactive and
+    // *removes the whole session* — art + metadata vanish — then re-adds it ~100ms
+    // later on buffering. While we're knowingly rebuilding, report `loading`
+    // instead of `idle` so the session stays active and the lock screen never
+    // drops it. (stop() still reports idle via its own direct playbackState.add.)
+    final ProcessingState rawState = _player.processingState;
+    final AudioProcessingState mappedState =
+        (_rebuildingSource && rawState == ProcessingState.idle)
+            ? AudioProcessingState.loading
+            : const {
+                ProcessingState.idle: AudioProcessingState.idle,
+                ProcessingState.loading: AudioProcessingState.loading,
+                ProcessingState.buffering: AudioProcessingState.buffering,
+                ProcessingState.ready: AudioProcessingState.ready,
+                ProcessingState.completed: AudioProcessingState.completed,
+              }[rawState]!;
+
     playbackState.add(playbackState.value.copyWith(
       controls: [
         if (_player.playing) MediaControl.pause else MediaControl.play,
-        MediaControl.stop, // X button to close player completely
       ],
       systemActions: const {
         MediaAction.play,
         MediaAction.pause,
-        MediaAction.stop, // Add stop action for X button
       },
-      androidCompactActionIndices: const [0, 1],
-      processingState: const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState]!,
+      androidCompactActionIndices: const [0],
+      processingState: mappedState,
       playing: _player.playing,
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
@@ -196,23 +224,42 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // PACIFICA PATTERN: Simple MediaItem management (SINGLE SOURCE OF TRUTH)
     // Only show player when we have real metadata or when actively playing
-    final shouldShowPlayer = _player.processingState != ProcessingState.idle &&
+    // ANDROID LOCK-SCREEN BLANK FIX: treat the transient idle during a play
+    // rebuild as "still showing" so we never push null mid-play. Without
+    // `|| _rebuildingSource`, setAudioSource()'s momentary idle blanks the
+    // notification to a placeholder before loading recovers.
+    final shouldShowPlayer = (_player.processingState != ProcessingState.idle ||
+            _rebuildingSource) &&
         _currentMediaItem != null &&
         (_currentMediaItem!.title != "KPFK 90.7 FM" || _player.playing);
 
-    if (Platform.isIOS && _currentMediaItem != null) {
-      // iOS LOCK-SCREEN FIX: Never push null during state transitions (e.g. a
-      // brief idle while resuming) — that lets another app's metadata flash on
-      // the lock screen. Explicit stop() still calls mediaItem.add(null) directly.
-      mediaItem.add(_currentMediaItem);
-    } else {
-      mediaItem.add(shouldShowPlayer ? _currentMediaItem : null);
-    }
+    // The value we would push this cycle (iOS never pushes null; Android gates
+    // on shouldShowPlayer).
+    final MediaItem? effectiveItem =
+        (Platform.isIOS && _currentMediaItem != null)
+            ? _currentMediaItem
+            : (shouldShowPlayer ? _currentMediaItem : null);
 
-    LoggerService.info(
-        '🎯 ONE TRUTH: _broadcastState called - MediaItem=${_currentMediaItem?.title}, playing=${_player.playing}, state=${_player.processingState}');
-    LoggerService.info(
-        '🎯 ONE TRUTH: This is the SINGLE SOURCE for all mediaItem.add() calls');
+    // ANDROID LOCK-SCREEN ART FLICKER FIX: _broadcastState fires in a rapid burst
+    // during play (idle→loading→loading→ready…). Previously it re-added the
+    // MediaItem every time, so audio_service re-decoded + re-parceled the full
+    // 1600x1600 artwork bitmap to the MediaSession on each call — which blanks &
+    // redraws the Samsung lock-screen image repeatedly. Only push when the item
+    // actually changes (title/artist/art or null↔item). iOS art is native, so it
+    // never saw this, but deduping is harmless there too.
+    final String pushSignature = effectiveItem == null
+        ? '<null>'
+        : '${effectiveItem.title}|${effectiveItem.artist}|${effectiveItem.artUri}';
+
+    if (pushSignature != _lastPushedMediaSignature) {
+      _lastPushedMediaSignature = pushSignature;
+      mediaItem.add(effectiveItem);
+      LoggerService.info(
+          '🎯 ONE TRUTH: _broadcastState pushed MediaItem=${effectiveItem?.title ?? "<null>"}, playing=${_player.playing}, state=${_player.processingState}');
+    } else {
+      LoggerService.info(
+          '🎯 ONE TRUTH: _broadcastState skipped redundant MediaItem push (unchanged) - playing=${_player.playing}, state=${_player.processingState}');
+    }
   }
 
   void _handlePlayerState(PlayerState state) {
@@ -267,11 +314,26 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     LoggerService.audioError('Audio error', error);
   }
 
+  // Samsung/Android: pressing a media button while the stream is loading causes
+  // the native codec to flush with PlatformException(abort). This is a deliberate
+  // platform-level interruption, not a network failure. Reconnecting on abort
+  // triggers a 3-attempt error storm and surfaces a false "Stream playback error"
+  // to the user. Detect it here and bail out early.
+  bool _isAbortError(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('abort') || s.contains('connection aborted');
+  }
+
   /// Handles async errors from the playback event stream (e.g. the server
   /// dropping the connection mid-stream). Triggers the gated reconnect loop;
   /// when reconnect has been halted (server confirmed down) we leave it alone.
   void _handleStreamError(Object error, StackTrace stackTrace) {
     LoggerService.audioError('Playback stream error', error);
+    if (_isAbortError(error)) {
+      LoggerService.info(
+          '🎵 Stream aborted by platform (media button during load) — stopping, not reconnecting');
+      return;
+    }
     if (_reconnectEnabled) {
       _reconnect();
     }
@@ -330,6 +392,13 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       LoggerService.audioError('Error during reconnection', e);
       _handleError(e);
+
+      if (_isAbortError(e)) {
+        LoggerService.info(
+            '🎵 Reconnect aborted by platform — halting retry loop');
+        _reconnectEnabled = false;
+        return;
+      }
 
       // Schedule another reconnect attempt with backoff (unless halted).
       final delay = reconnectBackoff(_reconnectAttempts);
@@ -398,14 +467,21 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } else {
         LoggerService.info(
             '🎯 CACHE FIX: rebuilding AudioSource (idle/cold or Android)');
-        final directStreamUrl = await _resolveStreamUrl(_streamUrl);
-        await _player.setAudioSource(
-          AudioSource.uri(
-            Uri.parse(directStreamUrl),
-            tag: _currentMediaItem,
-          ),
-        );
-        LoggerService.info('🎯 CACHE FIX: Fresh AudioSource set');
+        // Guard the transient idle that setAudioSource emits so _broadcastState
+        // keeps the current MediaItem on the notification instead of blanking it.
+        _rebuildingSource = true;
+        try {
+          final directStreamUrl = await _resolveStreamUrl(_streamUrl);
+          await _player.setAudioSource(
+            AudioSource.uri(
+              Uri.parse(directStreamUrl),
+              tag: _currentMediaItem,
+            ),
+          );
+          LoggerService.info('🎯 CACHE FIX: Fresh AudioSource set');
+        } finally {
+          _rebuildingSource = false;
+        }
       }
 
       LoggerService.info(
@@ -447,7 +523,9 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       LoggerService.audioError('Error playing stream', e);
       _handleError(e);
-      _reconnect();
+      if (!_isAbortError(e)) {
+        _reconnect();
+      }
     }
   }
 
@@ -483,10 +561,29 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await SamsungMediaSessionService.hideNotification();
       LoggerService.info(
           '🔍 SAMSUNG DEBUG: Notification hidden because PAUSE was pressed (STANDARD)');
+
+      // Explicitly broadcast updated state so the notification button flips to
+      // play when pause is triggered from the notification tray (the event
+      // stream alone is not reliable enough on Android 8.x).
+      _broadcastState();
     } catch (e) {
       LoggerService.audioError('Error pausing stream', e);
       _handleError(e);
     }
+  }
+
+  /// Called by audio_service when the app's task is swiped away from recents.
+  /// The manifest's `android:stopWithTask="true"` alone is unreliable for an
+  /// actively-playing foreground media service on Android 8.x — the system often
+  /// keeps the service (and its notification) alive. Doing a full stop() here
+  /// tears down playback and clears the notification regardless of whether we
+  /// were playing or paused when the app was closed.
+  @override
+  Future<void> onTaskRemoved() async {
+    LoggerService.info(
+        '🎯 onTaskRemoved: app swiped from recents - stopping to clear notification tray');
+    await stop();
+    await super.onTaskRemoved();
   }
 
   @override
@@ -518,6 +615,9 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       // Clear MediaItem to remove player from notification tray completely
       mediaItem.add(null);
+      // Keep the dedup signature in sync so a later play() is not skipped as
+      // "unchanged" and correctly re-pushes the MediaItem.
+      _lastPushedMediaSignature = '<null>';
       LoggerService.info(
           '🎯 STOP: Player removed from notification tray - MediaItem set to null');
 
@@ -560,7 +660,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     LoggerService.info('🎵 AudioHandler: Updating media session state only');
 
     final controls = [
-      MediaControl.stop,
       playing ? MediaControl.pause : MediaControl.play,
     ];
 
@@ -568,11 +667,10 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       PlaybackState(
         controls: controls,
         systemActions: const {
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
+          MediaAction.play,
+          MediaAction.pause,
         },
-        androidCompactActionIndices: const [0, 1],
+        androidCompactActionIndices: const [0],
         processingState: AudioProcessingState.ready,
         playing: playing,
         updatePosition: _player.position,
@@ -610,8 +708,14 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       title: title,
       artist: artist,
       duration: const Duration(hours: 24),
-      // REMOVED: Broken placeholder artwork that was causing 404 errors and overriding real artwork
-      // artUri: Uri.parse("https://confessor.kpfk.org/playlist/images/kpfk_logo.png"),
+      // ANDROID LOCK-SCREEN ART FIX: preserve the last-known real artwork.
+      // This internal builder used to drop artUri entirely (the old hardcoded
+      // kpfk_logo.png 404'd, so it was removed). But it also runs on play() via
+      // _handlePlayerState — stripping the art from _currentMediaItem and blanking
+      // the lock-screen image until the next metadata poll re-added it. Carrying
+      // the existing artUri forward keeps the image stable through play (audio_
+      // service reuses its cached bitmap for the unchanged URI = no reload flash).
+      artUri: _currentMediaItem?.artUri,
     );
 
     // Let _broadcastState handle the mediaItem.add() call (SINGLE SOURCE OF TRUTH)
@@ -717,7 +821,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           systemActions: const {
             MediaAction.play,
             MediaAction.pause,
-            MediaAction.stop
           },
           androidCompactActionIndices: const [0],
           processingState: AudioProcessingState.idle,
@@ -791,7 +894,16 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // - Lifecycle events, caching, everything!
 
     _currentMediaItem = mediaItem;
-    this.mediaItem.add(mediaItem); // ✅ LET THE FRAMEWORK DO ITS JOB!
+
+    // Dedup: skip the push when nothing changed so audio_service doesn't
+    // re-decode/re-parcel the artwork bitmap (Samsung lock-screen flicker).
+    // Shares the same signature as _broadcastState so the two paths stay in sync.
+    final String pushSignature =
+        '${mediaItem.title}|${mediaItem.artist}|${mediaItem.artUri}';
+    if (pushSignature != _lastPushedMediaSignature) {
+      _lastPushedMediaSignature = pushSignature;
+      this.mediaItem.add(mediaItem); // ✅ LET THE FRAMEWORK DO ITS JOB!
+    }
 
     LoggerService.info(
         '✅ STANDARD FLUTTER: MediaItem set - audio_service will handle lockscreen/notification');

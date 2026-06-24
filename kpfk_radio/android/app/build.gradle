@@ -1,6 +1,5 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -27,12 +26,16 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
-// Keystore properties removed - will be configured later for new app
+def keystorePropertiesFile = rootProject.file('key.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
 
 android {
     namespace "app.pacifica.kpfk"
-    compileSdk 36  // Updated to 36 for plugin compatibility and latest Android features
-    // NDK version will use Flutter's default (supports 16KB page sizes)
+    compileSdk 36
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
@@ -60,7 +63,14 @@ android {
         }
     }
 
-    // Signing configs removed - will be configured later with new keystore
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
 
     // 16KB page size packaging configuration
     packagingOptions {
@@ -71,7 +81,7 @@ android {
     
     buildTypes {
         release {
-            // signingConfig will be added later with new keystore
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false  // Explicitly disable resource shrinking for debug builds
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -88,8 +98,6 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    
     // CRITICAL: Samsung MediaSession dependencies (AndroidX compatible)
     implementation 'androidx.media:media:1.6.0'
     implementation 'androidx.core:core:1.10.1'

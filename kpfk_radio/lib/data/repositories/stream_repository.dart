@@ -201,7 +201,13 @@ class StreamRepository {
             _updateState(StreamState.stopped);
             break;
           case AudioProcessingState.idle:
-            _updateState(StreamState.initial);
+            // Guard: on Android, setAudioSource briefly emits idle before
+            // loading begins. Without this check that blip flashes the play
+            // button while the spinner is still expected. iOS is unaffected —
+            // it uses resume-in-place and never hits setAudioSource mid-play.
+            if (!_awaitingPlay) {
+              _updateState(StreamState.initial);
+            }
             break;
           case AudioProcessingState.error:
             // PHASE 10: the handler emits this after its bounded reconnect is

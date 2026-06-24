@@ -48,9 +48,18 @@ Future<void> main() async {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.kpfkfm.radio.audio',
         androidNotificationChannelName: 'KPFK Radio',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause:
-            true, // ROLLBACK: Restore original working value
+        // Must be false to pair with androidStopForegroundOnPause: false
+        // (audio_service asserts an ongoing notification requires stop-on-pause).
+        androidNotificationOngoing: false,
+        // APP-CLOSE NOTIFICATION FIX (proven by native logcat): with `true`, pause
+        // drops the service out of the foreground. Swiping the app away then kills
+        // the background service before audio_service can dispatch onTaskRemoved to
+        // the Dart isolate, so stop() never runs and the notification is orphaned
+        // (close-while-playing worked, close-while-paused did not). `false` keeps
+        // the service foreground through pause, so onTaskRemoved reliably fires in
+        // both states. Safe for the lock screen: the blank was a STATE_NONE issue
+        // fixed separately in _broadcastState, not by this flag.
+        androidStopForegroundOnPause: false,
         androidNotificationChannelDescription: 'KPFK Radio Audio Playback',
         androidNotificationIcon: 'drawable/ic_notification',
         androidShowNotificationBadge: false,
@@ -58,7 +67,7 @@ Future<void> main() async {
       ),
     );
     LoggerService.info(
-        '🎯 SAMSUNG FIX: AudioService.init() completed with androidStopForegroundOnPause=true');
+        '🎯 SAMSUNG FIX: AudioService.init() completed with androidStopForegroundOnPause=false');
 
     // === iOS REMOTE COMMAND HANDLER INIT (PRODUCTION - DO NOT MODIFY) ===
     // Set up remote lockscreen command handler for iOS

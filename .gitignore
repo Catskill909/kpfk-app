@@ -74,9 +74,10 @@ kpfk_radio/android/.gradle/
 kpfk_radio/android/app/build/
 kpfk_radio/android/build/
 
-# Keystore files
+# Keystore files and signing credentials
 *.jks
 *.keystore
+key.properties
 wpfw-keystore/
 wpfw-keystore 2/
 *.zip

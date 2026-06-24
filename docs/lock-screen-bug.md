@@ -4,7 +4,147 @@
 > lock-screen flash bug. Every attempt (and why it failed) is recorded here so we
 > never repeat a failed approach. **Append to this doc; do not delete history.**
 
-Last updated: 2026-06-23
+Last updated: 2026-06-24
+
+---
+
+## ✅ RESOLVED — ANDROID variant (2026-06-24, proven by device logs)
+
+**Different platform, same family of bug.** On **Android** (Samsung J7, API 27),
+pressing **play** made the notification + lock-screen art and metadata blank to a
+placeholder (no art, no title) for ~95ms, then recover.
+
+**Root cause (proven by live timestamped logs, not theory):** `KPFKAudioHandler.play()`
+on Android always rebuilds the source via `await _player.setAudioSource(...)`.
+`setAudioSource()` momentarily drops the player to `ProcessingState.idle`. The
+`shouldShowPlayer` gate in `_broadcastState()` treated `idle` as "nothing to show"
+→ `mediaItem.add(null)` → notification blanks → ~95ms later `loading` recovers it.
+
+Smoking-gun log (b0dxw1nas, 11:48:30):
+```
+11:48:29.500  CACHE FIX: rebuilding AudioSource (Android) → M3U fetch
+11:48:30.012  _broadcastState: state=ProcessingState.IDLE   ← setAudioSource resets to idle
+11:48:30.017  mediaItem changed → title="" artist=""        ← mediaItem.add(null) = THE BLANK
+11:48:30.091  _broadcastState: state=ProcessingState.loading
+11:48:30.108  mediaItem changed → title="Law and Disorder"  ← recovers ~95ms later
+```
+
+This is the Android twin of the iOS slot-flash: the iOS "never push null during
+transitions" guard (in `_broadcastState`, `Platform.isIOS` branch) was iOS-only,
+so Android still blanked.
+
+**The fix (Android-safe, iOS path untouched):** added a `_rebuildingSource` flag,
+set `true` around the Android `setAudioSource` rebuild in `play()` (in a
+try/finally) and folded into `shouldShowPlayer` as
+`(_player.processingState != ProcessingState.idle || _rebuildingSource)`. During
+the rebuild's transient idle we keep showing the current MediaItem instead of
+pushing null. `stop()` still clears the notification via its own direct
+`mediaItem.add(null)`, and the cold-start `"KPFK 90.7 FM"` placeholder suppression
+is unchanged.
+
+**Files changed:** `lib/services/audio_service/kpfk_audio_handler.dart`
+(`_rebuildingSource` field, `shouldShowPlayer` guard, try/finally in `play()`).
+
+### Follow-up: lock-screen IMAGE (only) still blanked on play — second cause
+
+After the `_rebuildingSource` fix, the notification text held but the **lock-screen
+artwork** still disappeared and returned on play. Logs showed the MediaItem text
+stayed `"Law and Disorder"` the whole time, so it was an artwork-specific blank.
+
+**Second root cause:** there are TWO MediaItem builders that both assign
+`_currentMediaItem`:
+- external `updateMediaItem(MediaItem)` (driven by the repo metadata poll) — carries
+  the real network `artUri` (`https://confessor.kpfk.org/pix/KPFK_it_.jpg`). ✅
+- internal `_updateMediaItem(title, artist)` — rebuilt the MediaItem with **no
+  artUri** (the old hardcoded `kpfk_logo.png` had 404'd and was removed, taking the
+  art with it). ❌
+
+On play, `_handlePlayerState` calls the **internal** `_updateMediaItem`, which
+overwrote `_currentMediaItem` with an art-less item → `_broadcastState` pushed a
+MediaItem with `artUri: null` → MediaSession cleared the lock-screen bitmap → blank,
+until the next metadata poll re-added the art ~1s later.
+
+**Fix:** internal `_updateMediaItem` now sets `artUri: _currentMediaItem?.artUri`,
+carrying the last-known real artwork forward instead of dropping it. The URI stays
+stable across play, so audio_service reuses its cached bitmap (no reload flash).
+
+### Follow-up 2: lock-screen image STILL flickered — third cause (the real one)
+
+After artUri-preserve, device logs showed the MediaItem text AND artUri both held
+through play — yet the lock-screen image still blanked & returned. The skia logs
+were the tell: the full **1600x1600 artwork bitmap was being re-decoded and
+re-parceled to the MediaSession on every `_broadcastState`**, which fire in a rapid
+burst during play (`idle→loading→loading→loading→ready…`).
+
+**Third root cause:** `_broadcastState` (and the external `updateMediaItem`) called
+`mediaItem.add()` *unconditionally* every time — re-pushing an **identical**
+MediaItem. Each add makes audio_service re-load + re-decode the artwork and re-set
+it on the MediaSession; the Samsung lock screen blanks & redraws the image on each
+re-set. The play-time burst of identical pushes = the visible flicker. (iOS art is
+painted by the native channel, not audio_service's mediaItem, so it never flickered.)
+
+**Fix:** dedup all pushes to the `mediaItem` stream by a `title|artist|artUri`
+signature (`_lastPushedMediaSignature`). `_broadcastState` and `updateMediaItem`
+only push when the signature changes; `stop()` resets it to `<null>` so a later
+play still re-pushes. During the play burst the item is unchanged → zero pushes →
+audio_service never re-decodes → lock-screen art stays rock-solid.
+
+**Files changed:** `lib/services/audio_service/kpfk_audio_handler.dart`
+(`_lastPushedMediaSignature` field; dedup in `_broadcastState`, `updateMediaItem`;
+signature reset in `stop()`).
+
+**Verify on device:** logs should show `_broadcastState skipped redundant MediaItem
+push (unchanged)` during the play burst, and NO 1600x1600 `Bitmap.writeToParcel`
+re-decodes between pause and play.
+
+### ✅ ACTUAL ROOT CAUSE (2026-06-24) — proven by NATIVE logcat, not flutter logs
+
+The first three follow-up fixes all targeted the MediaItem/artwork layer and none
+worked, because **`flutter run` logs do not capture the layer that renders the
+lock-screen art.** Captured full `adb logcat` during a controlled pause→play and
+found the smoking gun in Samsung's own lock-screen widget:
+
+```
+12:12:57.179  flutter: 🎯 CACHE FIX: rebuilding AudioSource (Android)   ← setAudioSource starts
+12:12:57.399  MediaSessionRecord: setPlaybackState oldState:2, newState:0   ← STATE_NONE
+12:12:57.407  vol.MediaSessions: onPlaybackStateChanged ... STATE_NONE
+12:12:57.408  vol.MediaSessions: Removing KPFK sentRemote=false             ← SESSION DROPPED
+12:12:57.515  MediaSessionRecord: setPlaybackState oldState:0, newState:8   ← buffering, re-added
+```
+
+**Root cause:** `play()` rebuilds the source via `setAudioSource()`, which drops the
+player to `ProcessingState.idle`. `_broadcastState` mapped that to
+`AudioProcessingState.idle` → audio_service pushed MediaSession
+`PlaybackState=STATE_NONE`. Samsung's lock-screen music widget
+(`vol.MediaSessions` / `ServiceBoxMusicPage`) treats a NONE-state session as
+inactive and **removes the entire session** (art + metadata) — then re-adds it
+~100ms later when buffering starts. THAT removal/re-add is the blank. It was never
+an artwork/cache problem.
+
+**The fix:** in `_broadcastState`, while `_rebuildingSource` is set, report the
+transient idle as `AudioProcessingState.loading` instead of `idle`, so the
+MediaSession never goes `STATE_NONE` and Samsung keeps the session on the lock
+screen. `stop()` still reports idle via its own direct `playbackState.add`, so real
+teardown is unaffected.
+
+**Why my earlier attempts missed it:** I was reading `flutter run` output, which
+only carries `flutter`/skia/codec tags — NOT the native `MediaSessionRecord` /
+`vol.MediaSessions` tags that actually drive the lock-screen widget. Lesson (same as
+the iOS saga): **get the native device logs before theorizing.**
+
+**Reverted:** the `androidStopForegroundOnPause: false` experiment from the previous
+round (restored to original `true` / `androidNotificationOngoing: true`) — it
+targeted the wrong cause and changed notification behavior unnecessarily.
+
+**Kept (correct, complementary):** `_rebuildingSource` null-push guard, artUri
+preserve, and mediaItem dedup all remain — they fix real secondary churn, but the
+STATE_NONE remap above is THE fix for the blank.
+
+**Files changed:** `lib/services/audio_service/kpfk_audio_handler.dart`
+(`_broadcastState` processingState remap under `_rebuildingSource`).
+
+**TODO:** port the Android fix set to WBAI once confirmed on device — the
+STATE_NONE remap is the essential one (sister-app rule).
 
 ---
 
