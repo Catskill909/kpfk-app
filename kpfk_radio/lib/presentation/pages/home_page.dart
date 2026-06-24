@@ -317,17 +317,18 @@ class _HomePageState extends State<HomePage> {
                       final bool isTablet = mq.shortestSide > 600;
                       // Logo a touch larger on bigger screens / tablets.
                       final double logoMaxWidth =
-                          mq.width * (small ? 0.9 : (isTablet ? 0.78 : 0.9));
+                          mq.width * (small ? 0.95 : (isTablet ? 0.78 : 0.9));
                       // Breathing room above the logo, scaled up on larger
-                      // screens and tablets (kept tight on small phones).
+                      // screens and tablets (kept tight on small phones so the
+                      // height-constrained logo can use the vertical space).
                       final double topGap =
-                          small ? 8.0 : (isTablet ? 40.0 : 24.0);
+                          small ? 4.0 : (isTablet ? 40.0 : 24.0);
                       return Padding(
                         padding: EdgeInsets.only(
-                          left: small ? 12.0 : 16.0,
-                          right: small ? 12.0 : 16.0,
+                          left: small ? 8.0 : 16.0,
+                          right: small ? 8.0 : 16.0,
                           // Reserve room for the floating bottom buttons.
-                          bottom: small ? 80.0 : 90.0,
+                          bottom: small ? 64.0 : 90.0,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -397,7 +398,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             // Show Information
                             if (state.metadata != null) ...[
-                              SizedBox(height: small ? 12 : 20),
+                              SizedBox(height: small ? 8 : 20),
                               Text(
                                 state.metadata!.current.showName,
                                 style: AppTextStyles.showTitleForDevice(mq),
@@ -445,7 +446,7 @@ class _HomePageState extends State<HomePage> {
                             Container(
                               alignment: Alignment.center,
                               margin: EdgeInsets.symmetric(
-                                  vertical: small ? 20.0 : 28.0),
+                                  vertical: small ? 10.0 : 28.0),
                               child: Semantics(
                             button: true,
                             enabled: true,
