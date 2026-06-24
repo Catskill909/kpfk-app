@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -16,6 +17,11 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player;
   final String _streamUrl;
   StreamMetadata? _currentMetadata;
+
+  // iOS only: same channel AppDelegate listens on. Used to tell the native side
+  // to re-claim the lock-screen Now Playing slot the instant play() runs.
+  static const MethodChannel _nativeChannel =
+      MethodChannel('com.kpfkfm.radio/metadata');
 
   // Optional: track last buffering log time to reduce log noise
   DateTime? _lastBufferingUpdate;
@@ -342,6 +348,20 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       LoggerService.info('🎯 ONE TRUTH: Play button pressed - starting flow');
 
+      // iOS LOCK-SCREEN FLASH FIX: This runs for EVERY play — the in-app button
+      // AND the lock-screen button both reach here. Reclaim the Now Playing slot
+      // for KPFK *immediately*, from the native cache, BEFORE the slow M3U fetch
+      // + setAudioSource below. Without this, the lock-screen slot belongs to the
+      // previously-used audio app (Spotify/Music) during the ~1s reconnect and
+      // its art/metadata flash before KPFK appears.
+      if (Platform.isIOS) {
+        try {
+          await _nativeChannel.invokeMethod('reassertNowPlaying');
+        } catch (e) {
+          LoggerService.error('reassertNowPlaying failed: $e');
+        }
+      }
+
       // PHASE 5/10: a fresh play attempt re-enables the reconnect loop that a
       // prior server-down may have halted, and resets the attempt counter.
       _reconnectEnabled = true;
@@ -358,25 +378,35 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       LoggerService.info(
           '🎯 SAMSUNG FIX: Audio focus gained successfully - lockscreen controls should now work');
 
-      // LIVE-AUDIO FIX: ALWAYS set a fresh AudioSource on every play (all
-      // platforms), so each press reconnects to Icecast from "now" = guaranteed
-      // live audio, never a stale/time-shifted buffer. This matches the proven
-      // sister app (wpfw).
-      // KNOWN REMAINING ISSUE: on iOS, rebuilding tears down the AVPlayerItem,
-      // so during the reconnect gap iOS briefly shows the previous app's Now
-      // Playing. That lock-screen flash is being fixed at the native layer
-      // (holding Now Playing across the gap) — NOT by reverting this rebuild.
-      LoggerService.info(
-          '🎯 CACHE FIX: ALWAYS setting fresh AudioSource (no cache check) - guaranteed live audio');
-      final directStreamUrl = await _resolveStreamUrl(_streamUrl);
-      await _player.setAudioSource(
-        AudioSource.uri(
-          Uri.parse(directStreamUrl),
-          tag: _currentMediaItem,
-        ),
-      );
-      LoggerService.info(
-          '🎯 CACHE FIX: Fresh AudioSource set - guaranteed no cached audio');
+      // DEVICE-LOG-PROVEN FIX (2026-06-23): On iOS, `await setAudioSource()`
+      // blocks ~2.5s while it connects + buffers a fresh live AVPlayerItem.
+      // During that gap KPFK is not yet "playing", so iOS keeps the lock-screen
+      // Now Playing slot on the previously-used audio app (Spotify/Music) — THAT
+      // is the flash. Setting nowPlayingInfo can't override it; iOS only hands
+      // the slot over once KPFK is actually playing audio.
+      //
+      // So: if the player still has a live source (we were paused, not stopped →
+      // processingState != idle), RESUME IN PLACE. Playback restarts in
+      // milliseconds, KPFK keeps/claims the slot instantly, and there's no gap
+      // for the other app to fill. Only rebuild when the source is gone (idle,
+      // after stop / cold start) or on Android (which relies on the fresh source).
+      final bool sourceAlive = _player.audioSource != null &&
+          _player.processingState != ProcessingState.idle;
+      if (Platform.isIOS && sourceAlive) {
+        LoggerService.info(
+            '🎯 iOS RESUME-IN-PLACE: source alive (state=${_player.processingState}) - skipping rebuild, no buffering gap, no lock-screen flash');
+      } else {
+        LoggerService.info(
+            '🎯 CACHE FIX: rebuilding AudioSource (idle/cold or Android)');
+        final directStreamUrl = await _resolveStreamUrl(_streamUrl);
+        await _player.setAudioSource(
+          AudioSource.uri(
+            Uri.parse(directStreamUrl),
+            tag: _currentMediaItem,
+          ),
+        );
+        LoggerService.info('🎯 CACHE FIX: Fresh AudioSource set');
+      }
 
       LoggerService.info(
           '🎯 ONE TRUTH: Calling _player.play() - event listener will trigger _broadcastState');

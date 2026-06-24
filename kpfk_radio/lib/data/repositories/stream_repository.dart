@@ -242,6 +242,16 @@ class StreamRepository {
       _awaitingPlay = true;
       _updateState(StreamState.connecting);
 
+      // iOS LOCK-SCREEN: reclaim the Now Playing slot INSTANTLY — before the
+      // audio handler tears down/rebuilds the player to reconnect. This is what
+      // stops the previously-used audio app (Spotify/Music) from flashing on the
+      // lock screen during the reconnect gap: we grab the slot with KPFK's
+      // title/artist + cached artwork the moment play is pressed.
+      if (_currentMetadata != null) {
+        _pushNativeLockscreen(_currentMetadata!,
+            isPlaying: true, forceUpdate: true);
+      }
+
       // PHASE 5: arm the watchdog in case the connection silently stalls (the
       // audio handler swallows connect failures into a background reconnect
       // loop, so they never throw here).
@@ -521,8 +531,45 @@ class StreamRepository {
     LoggerService.info(
         '🎵 SENDING TO LOCKSCREEN: Title="$title", Artist="$artist"');
 
-    // STANDARD FLUTTER APPROACH: Let audio_service handle the lock screen.
+    // audio_service drives Android + is the iOS fallback.
     _audioHandler.updateMediaItem(mediaItem);
+
+    // iOS: also push to the native channel that owns MPNowPlayingInfoCenter
+    // with cached artwork. Keeping it in sync here means the cache is warm, so
+    // the instant reclaim on play() (below) repaints with the real image.
+    _pushNativeLockscreen(metadata,
+        isPlaying: _audioHandler.playbackState.value.playing);
+  }
+
+  /// iOS only: push the current show straight to the native lock-screen channel
+  /// (MPNowPlayingInfoCenter). With [forceUpdate] it bypasses the native
+  /// debounce and reclaims the Now Playing slot immediately — used at the start
+  /// of play() so the previously-used audio app can't flash during the
+  /// reconnect gap. No-op on Android (audio_service handles that).
+  void _pushNativeLockscreen(StreamMetadata metadata,
+      {required bool isPlaying, bool forceUpdate = false}) {
+    if (!Platform.isIOS) return;
+    final showInfo = metadata.current;
+    final String title =
+        showInfo.showName.isNotEmpty ? showInfo.showName : 'KPFK 90.7 FM';
+    final String artist;
+    if (showInfo.hasSongInfo &&
+        showInfo.songTitle != null &&
+        showInfo.songTitle!.isNotEmpty) {
+      artist = showInfo.songArtist != null && showInfo.songArtist!.isNotEmpty
+          ? 'Playing: ${showInfo.songTitle} - ${showInfo.songArtist}'
+          : 'Playing: ${showInfo.songTitle}';
+    } else {
+      artist =
+          showInfo.host.isNotEmpty ? 'Host: ${showInfo.host}' : 'KPFK 90.7 FM';
+    }
+    _nativeMetadataService.updateLockscreenMetadata(
+      title: title,
+      artist: artist,
+      artworkUrl: showInfo.hostImage,
+      isPlaying: isPlaying,
+      forceUpdate: forceUpdate,
+    );
   }
 
   /// Handle server-specific errors and reset audio controls
