@@ -27,6 +27,14 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Auto-generated iOS Flutter files (rewritten on every build — must NOT be tracked;
+# tracking them causes constant churn + CocoaPods "sandbox not in sync" drift)
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+
+# Xcode per-user UI state
+**/xcuserdata/
+
 # Symbolication related
 app.*.symbols
 
