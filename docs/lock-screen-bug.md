@@ -143,8 +143,12 @@ STATE_NONE remap above is THE fix for the blank.
 **Files changed:** `lib/services/audio_service/kpfk_audio_handler.dart`
 (`_broadcastState` processingState remap under `_rebuildingSource`).
 
-**TODO:** port the Android fix set to WBAI once confirmed on device — the
-STATE_NONE remap is the essential one (sister-app rule).
+**WBAI port (2026-06-24):** all Android fixes applied to `wbai-app/wbai_radio`
+(`wbai_audio_handler.dart`, `main.dart`, `AndroidManifest.xml`) and `flutter analyze`
+is clean. **NOT yet tested on device** — the user is testing WBAI later in the week
+and will deal with any issues then. WBAI kept its notification stop button (KPFK had
+it removed in a separate earlier task); only the lock-screen/notification Android
+fixes were ported, not that UX change.
 
 ---
 
