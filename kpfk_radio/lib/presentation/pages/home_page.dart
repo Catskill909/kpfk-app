@@ -317,7 +317,7 @@ class _HomePageState extends State<HomePage> {
                       final bool isTablet = mq.shortestSide > 600;
                       // Logo a touch larger on bigger screens / tablets.
                       final double logoMaxWidth =
-                          mq.width * (small ? 0.8 : (isTablet ? 0.78 : 0.9));
+                          mq.width * (small ? 0.9 : (isTablet ? 0.78 : 0.9));
                       // Breathing room above the logo, scaled up on larger
                       // screens and tablets (kept tight on small phones).
                       final double topGap =

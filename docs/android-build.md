@@ -284,8 +284,54 @@ full `adb logcat`. Capture native logs before theorizing.
 
 ---
 
+### Samsung launcher — adaptive icon corner cropping
+
+**Symptom:** On a physical Samsung device the home-screen / app-drawer icon had its corners
+cropped — the red KPFK border square was clipped flat by the launcher mask. (iOS was fine.)
+
+**Root cause:** The app shipped only a legacy square PNG (`@mipmap/launcher_icon`) with no
+adaptive icon. Samsung One UI force-masks every icon into a squircle, and a full-bleed square
+has no safe-zone margin, so the mask eats the corners.
+
+**Fix (2026-06-24):** Added a proper adaptive icon via `flutter_launcher_icons`:
+- `adaptive_icon_background: "#000000"` + `adaptive_icon_foreground` in `pubspec.yaml`.
+- `assets/icons/app_icon_foreground.png` — the logo scaled to ~70% on a black margin so it
+  sits inside the adaptive safe zone; the mask now crops only black, never the red border.
+- Generates `mipmap-anydpi-v26/launcher_icon.xml` + `drawable-*/ic_launcher_foreground.png`.
+
+Regenerate after changing the source art:
+```bash
+cd kpfk_radio && flutter pub run flutter_launcher_icons
+```
+
+**Gotcha:** `flutter install` does NOT rebuild — it pushes the last-built APK, so an icon
+change won't appear. After changing icons, `flutter build apk` first, then uninstall the app
+(clears the launcher's icon cache) and reinstall, or the device shows the stale icon.
+
+---
+
+### Small-screen phones (shortestSide < 380) — drawer + logo tuning
+
+The UI special-cases small / low-res phones (older Samsungs) via `_isSmallPhone`
+(`shortestSide < 380`). iPhones and larger Android phones use the standard layout and are
+unaffected by these values.
+
+**Fixes (2026-06-24)** — all confined to the small-phone branch, iOS layout untouched:
+- **Side drawer header** (`lib/presentation/widgets/app_drawer.dart`): was a fixed 60px
+  `Container` with no `SafeArea`, so the logo jammed under the status bar and the black fill
+  didn't reach the status-bar inset (read as "transparent"). Now wrapped in
+  `SafeArea(bottom: false)` with 16px vertical padding; header logo 40 → 52px.
+- **Drawer menu** (`app_drawer.dart`): font 13 → 16, leading icons 20 → 24, row vertical
+  padding 5 → 2.5 so items don't over-space the available height.
+- **Home station logo** (`lib/presentation/pages/home_page.dart`): `logoMaxWidth` cap
+  0.8 → 0.9 of screen width (matching regular phones). Still `Flexible` + `AspectRatio`, so
+  it shrinks to fit the metadata text + play button on tighter screens.
+
+---
+
 ## Maintenance history
 
 | Date | Flutter | Gradle | Kotlin | Notes |
 |------|---------|--------|--------|-------|
 | 2026-06-24 | 3.41.6 → 3.44.3 | 8.13 → 8.14.2 | 2.1.0 → 2.2.20 | Initial keystore setup; fixed cmdline-tools; migrated to built-in Kotlin plugin; NDK → 28.2.13676358; Fixed notification abort storm + stopWithTask |
+| 2026-06-24 | 3.44.3 | 8.14.2 | 2.2.20 | Adaptive launcher icon (Samsung corner crop); small-screen drawer + home-logo tuning (`_isSmallPhone`) |

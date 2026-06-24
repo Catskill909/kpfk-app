@@ -81,10 +81,10 @@ class AppDrawer extends StatelessWidget {
     final isSmallPhone = size.shortestSide < 380;
     final headerPadding =
         isSmallPhone ? 4.0 : 16.0; // Much smaller padding for small devices
-    final iconSize = isSmallPhone ? 20.0 : 28.0;
+    final iconSize = isSmallPhone ? 24.0 : 28.0;
     final listTileHorizontalPadding = isSmallPhone ? 12.0 : 24.0;
     final listTileVerticalPadding =
-        isSmallPhone ? 1.0 : 8.0; // Drastically reduce vertical spacing
+        isSmallPhone ? 2.5 : 8.0; // Tighter spacing on small devices
 
     return Drawer(
       child: Container(
@@ -99,18 +99,21 @@ class AppDrawer extends StatelessWidget {
         child: Column(
           children: [
             Container(
-              height: isSmallPhone
-                  ? 60.0
-                  : null, // Even smaller header for small devices
               decoration: const BoxDecoration(
                 color: Colors.black,
               ),
               child: isSmallPhone
-                  ? Center(
-                      child: Image.asset(
-                        'assets/images/header.png',
-                        fit: BoxFit.contain,
-                        height: 40.0, // Much smaller image for small devices
+                  ? SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: Center(
+                          child: Image.asset(
+                            'assets/images/header.png',
+                            fit: BoxFit.contain,
+                            height: 52.0, // Larger logo with breathing room
+                          ),
+                        ),
                       ),
                     )
                   : DrawerHeader(
@@ -139,8 +142,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -159,8 +162,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -180,8 +183,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -201,8 +204,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -222,8 +225,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -243,8 +246,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -264,8 +267,8 @@ class AppDrawer extends StatelessWidget {
                         style: AppTextStyles.drawerMenuItemForDevice(size)
                             .copyWith(
                           fontSize: isSmallPhone
-                              ? 13.0
-                              : 18.0, // Even smaller font for small devices
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
