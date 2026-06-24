@@ -358,25 +358,25 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       LoggerService.info(
           '🎯 SAMSUNG FIX: Audio focus gained successfully - lockscreen controls should now work');
 
-      // iOS LOCK-SCREEN FIX: Do NOT force a fresh AudioSource on every play().
-      // setAudioSource destroys the iOS AVPlayerItem, which drops Now Playing and
-      // lets another app's metadata flash on the lock screen during the gap. On
-      // iOS we just resume the existing (paused) player; if the buffer is stale
-      // it throws and the catch below calls _reconnect() to recover.
-      // Android keeps the fresh-source "cache fix" behavior unchanged.
-      if (!Platform.isIOS) {
-        LoggerService.info(
-            '🎯 CACHE FIX: ALWAYS setting fresh AudioSource (no cache check)');
-        final directStreamUrl = await _resolveStreamUrl(_streamUrl);
-        await _player.setAudioSource(
-          AudioSource.uri(
-            Uri.parse(directStreamUrl),
-            tag: _currentMediaItem,
-          ),
-        );
-        LoggerService.info(
-            '🎯 CACHE FIX: Fresh AudioSource set - guaranteed no cached audio');
-      }
+      // LIVE-AUDIO FIX: ALWAYS set a fresh AudioSource on every play (all
+      // platforms), so each press reconnects to Icecast from "now" = guaranteed
+      // live audio, never a stale/time-shifted buffer. This matches the proven
+      // sister app (wpfw).
+      // KNOWN REMAINING ISSUE: on iOS, rebuilding tears down the AVPlayerItem,
+      // so during the reconnect gap iOS briefly shows the previous app's Now
+      // Playing. That lock-screen flash is being fixed at the native layer
+      // (holding Now Playing across the gap) — NOT by reverting this rebuild.
+      LoggerService.info(
+          '🎯 CACHE FIX: ALWAYS setting fresh AudioSource (no cache check) - guaranteed live audio');
+      final directStreamUrl = await _resolveStreamUrl(_streamUrl);
+      await _player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(directStreamUrl),
+          tag: _currentMediaItem,
+        ),
+      );
+      LoggerService.info(
+          '🎯 CACHE FIX: Fresh AudioSource set - guaranteed no cached audio');
 
       LoggerService.info(
           '🎯 ONE TRUTH: Calling _player.play() - event listener will trigger _broadcastState');

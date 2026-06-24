@@ -48,6 +48,13 @@ class StreamRepository {
   StreamState _currentState = StreamState.initial;
   StreamMetadata? _currentMetadata;
 
+  // True between a play() request and the player actually reaching `playing`.
+  // During this window the source can momentarily report `ready` before its
+  // `playing` flag flips true; without this guard that instant is mapped to
+  // `paused`, which flashes the play icon between the spinner and the pause
+  // icon. While awaiting play we keep it a spinner (buffering) state instead.
+  bool _awaitingPlay = false;
+
   StreamRepository({
     required KPFKAudioHandler audioHandler,
     required MetadataService metadataService,
@@ -177,7 +184,18 @@ class StreamRepository {
             _updateState(StreamState.buffering);
             break;
           case AudioProcessingState.ready:
-            _updateState(isPlaying ? StreamState.playing : StreamState.paused);
+            if (isPlaying) {
+              _awaitingPlay = false;
+              _updateState(StreamState.playing);
+            } else if (_awaitingPlay) {
+              // Startup blip: the source is ready but the player's `playing`
+              // flag hasn't flipped true yet. Stay on a spinner (buffering)
+              // state so the play icon never flashes between the spinner and
+              // the pause icon — we only reach `playing` next.
+              _updateState(StreamState.buffering);
+            } else {
+              _updateState(StreamState.paused);
+            }
             break;
           case AudioProcessingState.completed:
             _updateState(StreamState.stopped);
@@ -221,6 +239,7 @@ class StreamRepository {
       // UI immediately and let the player connect. The old pre-flight GET added
       // ~2s of fixed latency in front of every play; just_audio surfaces real
       // connection/stream errors which we classify on the failure path below.
+      _awaitingPlay = true;
       _updateState(StreamState.connecting);
 
       // PHASE 5: arm the watchdog in case the connection silently stalls (the
@@ -354,6 +373,9 @@ class StreamRepository {
     try {
       LoggerService.info(
           '🎵 StreamRepository: Pause requested - SPOTIFY SIMPLE APPROACH');
+      // A deliberate pause ends any in-flight play attempt, so a subsequent
+      // `ready` event should map to `paused` normally again.
+      _awaitingPlay = false;
 
       // iOS LOCK-SCREEN FIX: Use pause() instead of stop() to keep the audio
       // session active and preserve Now Playing status on iOS. stop() was
@@ -373,6 +395,7 @@ class StreamRepository {
 
   Future<void> stop() async {
     try {
+      _awaitingPlay = false;
       await _audioHandler.stop();
       _updateState(StreamState.stopped);
       _metadataService.stopFetching();
@@ -408,6 +431,15 @@ class StreamRepository {
           newState == StreamState.error ||
           newState == StreamState.initial) {
         _cancelConnectingWatchdog();
+      }
+
+      // A play attempt is over once we actually start playing or it fails
+      // outright. (Deliberately NOT cleared on `initial`, which the iOS source
+      // rebuild churns through mid-play.)
+      if (newState == StreamState.playing ||
+          newState == StreamState.stopped ||
+          newState == StreamState.error) {
+        _awaitingPlay = false;
       }
     }
   }
@@ -453,9 +485,6 @@ class StreamRepository {
           '🎵 SONG INFO: Title="${showInfo.songTitle}", Artist="${showInfo.songArtist}"');
     }
 
-    // Get current playback state - we'll need this for the native layer
-    final isPlaying = _audioHandler.playbackState.value.playing;
-
     // Create explicit title and artist fields based on available info
     // CRITICAL: Show name must be the primary title for lockscreen
     final String title = showInfo.showName.isNotEmpty
@@ -492,20 +521,8 @@ class StreamRepository {
     LoggerService.info(
         '🎵 SENDING TO LOCKSCREEN: Title="$title", Artist="$artist"');
 
-    // ✅ STANDARD FLUTTER APPROACH: Let audio_service handle EVERYTHING!
-    // This works for iOS, Android, lifecycle events, artwork caching, etc.
-    // No custom Swift code needed - audio_service does it all!
-
-    LoggerService.info(
-        '✅ STANDARD: Calling audioHandler.updateMediaItem() - framework will handle lockscreen');
-    LoggerService.info(
-        '✅ Platform: ${Platform.isAndroid ? 'Android' : 'iOS'}, isPlaying: $isPlaying');
-    LoggerService.info('✅ Artwork URL: ${showInfo.hostImage ?? "none"}');
-
+    // STANDARD FLUTTER APPROACH: Let audio_service handle the lock screen.
     _audioHandler.updateMediaItem(mediaItem);
-
-    LoggerService.info(
-        '✅ STANDARD: MediaItem sent to audio_service - it will handle all platform-specific details');
   }
 
   /// Handle server-specific errors and reset audio controls
