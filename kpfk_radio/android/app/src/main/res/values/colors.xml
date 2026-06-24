@@ -12,4 +12,5 @@
     
     <!-- AudioService notification colors -->
     <color name="audio_service_notification_color">#FF6B6B</color>
+	<color name="ic_launcher_background">#000000</color>
 </resources>
