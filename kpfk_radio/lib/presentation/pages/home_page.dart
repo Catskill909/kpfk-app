@@ -148,6 +148,15 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       drawer: const AppDrawer(),
       appBar: AppBar(
+        // Toolbar must be taller than the logo, otherwise the fixed-height
+        // toolbar clips the image top/bottom. Centering the logo in this
+        // taller bar also gives it breathing room from the top tray.
+        // Phones keep the default 56 (logo is only ~40px there, never
+        // clipped). Only the tablet bars are enlarged so the bigger logo
+        // (60/70px) isn't clipped by the toolbar.
+        toolbarHeight: _isLargeTablet(context)
+            ? 96
+            : (_isMediumTablet(context) ? 84 : 56),
         leading: Builder(
           builder: (context) => IconButton(
             icon: Icon(
