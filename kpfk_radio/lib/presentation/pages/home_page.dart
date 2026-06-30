@@ -140,6 +140,49 @@ class _HomePageState extends State<HomePage> {
     return size.shortestSide < 380; // Phones smaller than iPhone XR
   }
 
+  // Measures the rendered height of the metadata text block (title + time +
+  // song/next) for the given width. Used by the layout so the image can be
+  // sized against the ACTUAL text height — the image only gives up space once
+  // the real content + reserves no longer fit, never just because text wrapped.
+  double _measureMetadataHeight({
+    required StreamBlocState state,
+    required Size size,
+    required bool small,
+    required double maxWidth,
+  }) {
+    double measure(String text, TextStyle style, int maxLines) {
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: maxLines,
+        ellipsis: '…',
+      )..layout(maxWidth: maxWidth);
+      return tp.height;
+    }
+
+    if (state.metadata == null) {
+      return 20.0 +
+          measure('Loading stream information...', AppTextStyles.bodyMedium, 2);
+    }
+
+    final cur = state.metadata!.current;
+    double h = small ? 8.0 : 20.0; // gap above title
+    h += measure(cur.showName, AppTextStyles.showTitleForDevice(size), 2);
+    h += 4.0;
+    h += measure(cur.time, AppTextStyles.showTimeForDevice(size), 2);
+    if (cur.hasSongInfo) {
+      h += small ? 8.0 : 10.0;
+      h += measure('Song: ${cur.songTitle} - ${cur.songArtist}',
+          AppTextStyles.bodyLargeForDevice(size), 2);
+    } else if (state.metadata!.next.showName.isNotEmpty) {
+      h += small ? 8.0 : 10.0;
+      h += measure('Next: ${state.metadata!.next.showName}',
+          AppTextStyles.bodyMediumForDevice(size), 2);
+    }
+    return h;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOnline =
@@ -154,9 +197,8 @@ class _HomePageState extends State<HomePage> {
         // Phones keep the default 56 (logo is only ~40px there, never
         // clipped). Only the tablet bars are enlarged so the bigger logo
         // (60/70px) isn't clipped by the toolbar.
-        toolbarHeight: _isLargeTablet(context)
-            ? 96
-            : (_isMediumTablet(context) ? 84 : 56),
+        toolbarHeight:
+            _isLargeTablet(context) ? 96 : (_isMediumTablet(context) ? 84 : 56),
         leading: Builder(
           builder: (context) => IconButton(
             icon: Icon(
@@ -223,7 +265,8 @@ class _HomePageState extends State<HomePage> {
                   _sawPlaybackProgress) {
                 // playing/error are definitive; paused/stopped/initial only
                 // count once a real attempt has been observed.
-                LoggerService.debug('🔄 SPINNER: Clearing spinner - state is $s');
+                LoggerService.debug(
+                    '🔄 SPINNER: Clearing spinner - state is $s');
                 setState(() {
                   _showLocalLoading = false;
                 });
@@ -324,83 +367,115 @@ class _HomePageState extends State<HomePage> {
                       final mq = MediaQuery.of(context).size;
                       final bool small = _isSmallPhone(context);
                       final bool isTablet = mq.shortestSide > 600;
-                      // Logo a touch larger on bigger screens / tablets.
-                      final double logoMaxWidth =
+                      // ----- Image sizing -----------------------------------
+                      // The image gets a width-based PREFERRED size and stays
+                      // there for every show; the breathing room around the play
+                      // button flexes to absorb differing text lengths. We only
+                      // shrink the image when the measured text + reserves can't
+                      // otherwise fit (small handsets).
+                      final double hPad = small ? 8.0 : 16.0;
+                      final double contentW = constraints.maxWidth - hPad * 2;
+                      final double logoPreferred =
                           mq.width * (small ? 0.95 : (isTablet ? 0.78 : 0.9));
-                      // Breathing room above the logo, scaled up on larger
-                      // screens and tablets (kept tight on small phones so the
-                      // height-constrained logo can use the vertical space).
-                      final double topGap =
-                          small ? 4.0 : (isTablet ? 40.0 : 24.0);
+
+                      // Fixed reserves: top gap, image→text gap, the guaranteed
+                      // breathing kept around the play button even in the worst
+                      // case, and the bottom strip left clear for the floating
+                      // donate / sleep-timer buttons.
+                      final double topReserve =
+                          small ? 8.0 : (isTablet ? 40.0 : 24.0);
+                      final double imgToTextGap = small ? 8.0 : 20.0;
+                      final double minBreath = small ? 16.0 : 36.0;
+                      final double bottomReserve = small ? 64.0 : 90.0;
+
+                      // Play button footprint (size must match the widget below).
+                      final double buttonSize =
+                          small ? 90.0 : (isTablet ? 150.0 : 120.0);
+                      final double buttonMargin = small ? 4.0 : 8.0;
+                      final double buttonBlock = buttonSize + buttonMargin * 2;
+
+                      // Actual measured height of the metadata text block.
+                      final double textBlockH = _measureMetadataHeight(
+                        state: state,
+                        size: mq,
+                        small: small,
+                        maxWidth: contentW,
+                      );
+
+                      // What's left for the image after everything else; the
+                      // image takes its preferred size unless that budget is
+                      // smaller (then it shrinks to fit — and no further than a
+                      // sensible floor).
+                      final double columnH =
+                          constraints.maxHeight - bottomReserve;
+                      final double imageBudget = columnH -
+                          topReserve -
+                          imgToTextGap -
+                          textBlockH -
+                          buttonBlock -
+                          minBreath;
+                      final double logoSize = imageBudget
+                          .clamp(small ? 80.0 : 120.0, logoPreferred)
+                          .toDouble();
                       return Padding(
                         padding: EdgeInsets.only(
-                          left: small ? 8.0 : 16.0,
-                          right: small ? 8.0 : 16.0,
+                          left: hPad,
+                          right: hPad,
                           // Reserve room for the floating bottom buttons.
-                          bottom: small ? 64.0 : 90.0,
+                          bottom: bottomReserve,
                         ),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            SizedBox(height: topGap),
-                            // Station Logo - tap to show info.
-                            // Flexible + AspectRatio => shrinks to fit height.
-                            Flexible(
-                              child: Center(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                      maxWidth: logoMaxWidth),
-                                  child: AspectRatio(
-                                    aspectRatio: 1,
-                                    child: GestureDetector(
-                                      onTap: state.metadata != null
-                                          ? () {
-                                              setState(() {
-                                                _showInfoModal = true;
-                                              });
-                                            }
-                                          : null,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          border: Border.all(
-                                            color: const Color(
-                                                0x1AFFFFFF), // ~10% white
-                                            width: isTablet ? 1 : 2,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(
-                                                  red: 0,
-                                                  green: 0,
-                                                  blue: 0,
-                                                  alpha: 77), // ~0.3 opacity
-                                              blurRadius: 8,
-                                              offset: const Offset(2, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          child: state.metadata?.current
-                                                      .hasHostImage ==
-                                                  true
-                                              ? Image.network(
-                                                  state.metadata!.current
-                                                      .hostImage!,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error,
-                                                          stackTrace) =>
-                                                      _buildLoadingContainer(
-                                                          'Error loading image'),
-                                                )
-                                              : _buildLoadingContainer(
-                                                  'Loading stream information...'),
-                                        ),
-                                      ),
+                            SizedBox(height: topReserve),
+                            // Station image — fixed square size (logoSize),
+                            // computed above so it stays constant across shows
+                            // and only shrinks to fit small screens.
+                            SizedBox(
+                              width: logoSize,
+                              height: logoSize,
+                              child: GestureDetector(
+                                onTap: state.metadata != null
+                                    ? () {
+                                        setState(() {
+                                          _showInfoModal = true;
+                                        });
+                                      }
+                                    : null,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color:
+                                          const Color(0x1AFFFFFF), // ~10% white
+                                      width: isTablet ? 1 : 2,
                                     ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                            red: 0,
+                                            green: 0,
+                                            blue: 0,
+                                            alpha: 77), // ~0.3 opacity
+                                        blurRadius: 8,
+                                        offset: const Offset(2, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: state.metadata?.current
+                                                .hasHostImage ==
+                                            true
+                                        ? Image.network(
+                                            state.metadata!.current.hostImage!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    _buildLoadingContainer(
+                                                        'Error loading image'),
+                                          )
+                                        : _buildLoadingContainer(
+                                            'Loading stream information...'),
                                   ),
                                 ),
                               ),
@@ -451,178 +526,190 @@ class _HomePageState extends State<HomePage> {
                                 textAlign: TextAlign.center,
                               ),
                             ],
+                            // Flexible breathing room ABOVE the play button.
+                            // Pairs with the equal Spacer below so the button
+                            // stays centered; both collapse first when a long
+                            // text block needs the room.
+                            const Spacer(),
                             // Playback Control with Loading State
                             Container(
                               alignment: Alignment.center,
                               margin: EdgeInsets.symmetric(
-                                  vertical: small ? 10.0 : 28.0),
+                                  vertical: small ? 4.0 : 8.0),
                               child: Semantics(
-                            button: true,
-                            enabled: true,
-                            label: _showLocalLoading
-                                ? 'Loading audio'
-                                : (state.playbackState == StreamState.playing
-                                    ? 'Stop stream and reset'
-                                    : 'Play stream'),
-                            hint: _showLocalLoading
-                                ? null
-                                : 'Double tap to ${state.playbackState == StreamState.playing ? 'stop and reset' : 'play'}',
-                            liveRegion: _showLocalLoading,
-                            child: Material(
-                              color: const Color(0xFF0F0404),
-                              shape: const CircleBorder(),
-                              elevation: 4,
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: (!isOnline ||
-                                        state.playbackState ==
-                                            StreamState.loading ||
-                                        state.playbackState ==
-                                            StreamState.buffering ||
-                                        _showLocalLoading)
-                                    ? (!isOnline
-                                        ? () {
-                                            // Network alert will automatically appear via main.dart
-                                            // No manual dialog needed with new system
-                                            return;
-                                          }
-                                        : null)
-                                    : () {
-                                        if (state.playbackState ==
-                                            StreamState.playing) {
-                                          // PAUSE: Set flag to prevent spinner
-                                          setState(() {
-                                            _userPressedPause = true;
-                                          });
-                                          context
-                                              .read<StreamBloc>()
-                                              .add(PauseStream());
-                                        } else {
-                                          // PLAY: Show spinner - starting stream takes time
-                                          LoggerService.debug(
-                                              '🔄 SPINNER: Play button pressed, current state: ${state.playbackState}');
-                                          setState(() {
-                                            _showLocalLoading = true;
-                                            _sawPlaybackProgress = false;
-                                            _userPressedPause = false;
-                                          });
-                                          LoggerService.debug(
-                                              '🔄 SPINNER: Spinner enabled, starting timeout');
-                                          _startSpinnerTimeout();
-                                          context
-                                              .read<StreamBloc>()
-                                              .add(StartStream());
-                                        }
-                                      },
-                                child: SizedBox(
-                                  width: _isSmallPhone(context)
-                                      ? 90.0
-                                      : (MediaQuery.of(context)
-                                                  .size
-                                                  .shortestSide >
-                                              600
-                                          ? 150.0
-                                          : 120.0),
-                                  height: _isSmallPhone(context)
-                                      ? 90.0
-                                      : (MediaQuery.of(context)
-                                                  .size
-                                                  .shortestSide >
-                                              600
-                                          ? 150.0
-                                          : 120.0),
-                                  child: Center(
-                                    child: (_showLocalLoading ||
-                                            _isConnectingState(
-                                                state.playbackState))
-                                        ? SizedBox(
-                                            width: _isSmallPhone(context)
-                                                ? 38.0
-                                                : (MediaQuery.of(context)
-                                                            .size
-                                                            .shortestSide >
-                                                        600
-                                                    ? 64.0
-                                                    : 50.0),
-                                            height: _isSmallPhone(context)
-                                                ? 38.0
-                                                : (MediaQuery.of(context)
-                                                            .size
-                                                            .shortestSide >
-                                                        600
-                                                    ? 64.0
-                                                    : 50.0),
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Colors.white),
-                                              strokeWidth: 4.0,
-                                              strokeCap: StrokeCap.round,
-                                            ),
-                                          )
-                                        : Icon(
-                                            _getPlaybackIcon(
-                                                state.playbackState),
-                                            size: _isSmallPhone(context)
-                                                ? 90.0
-                                                : (MediaQuery.of(context)
-                                                            .size
-                                                            .shortestSide >
-                                                        600
-                                                    ? 150.0
-                                                    : 120.0),
-                                            color: Colors.white,
-                                          ),
+                                button: true,
+                                enabled: true,
+                                label: _showLocalLoading
+                                    ? 'Loading audio'
+                                    : (state.playbackState ==
+                                            StreamState.playing
+                                        ? 'Stop stream and reset'
+                                        : 'Play stream'),
+                                hint: _showLocalLoading
+                                    ? null
+                                    : 'Double tap to ${state.playbackState == StreamState.playing ? 'stop and reset' : 'play'}',
+                                liveRegion: _showLocalLoading,
+                                child: Material(
+                                  color: const Color(0xFF0F0404),
+                                  shape: const CircleBorder(),
+                                  elevation: 4,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: (!isOnline ||
+                                            state.playbackState ==
+                                                StreamState.loading ||
+                                            state.playbackState ==
+                                                StreamState.buffering ||
+                                            _showLocalLoading)
+                                        ? (!isOnline
+                                            ? () {
+                                                // Network alert will automatically appear via main.dart
+                                                // No manual dialog needed with new system
+                                                return;
+                                              }
+                                            : null)
+                                        : () {
+                                            if (state.playbackState ==
+                                                StreamState.playing) {
+                                              // PAUSE: Set flag to prevent spinner
+                                              setState(() {
+                                                _userPressedPause = true;
+                                              });
+                                              context
+                                                  .read<StreamBloc>()
+                                                  .add(PauseStream());
+                                            } else {
+                                              // PLAY: Show spinner - starting stream takes time
+                                              LoggerService.debug(
+                                                  '🔄 SPINNER: Play button pressed, current state: ${state.playbackState}');
+                                              setState(() {
+                                                _showLocalLoading = true;
+                                                _sawPlaybackProgress = false;
+                                                _userPressedPause = false;
+                                              });
+                                              LoggerService.debug(
+                                                  '🔄 SPINNER: Spinner enabled, starting timeout');
+                                              _startSpinnerTimeout();
+                                              context
+                                                  .read<StreamBloc>()
+                                                  .add(StartStream());
+                                            }
+                                          },
+                                    child: SizedBox(
+                                      width: _isSmallPhone(context)
+                                          ? 90.0
+                                          : (MediaQuery.of(context)
+                                                      .size
+                                                      .shortestSide >
+                                                  600
+                                              ? 150.0
+                                              : 120.0),
+                                      height: _isSmallPhone(context)
+                                          ? 90.0
+                                          : (MediaQuery.of(context)
+                                                      .size
+                                                      .shortestSide >
+                                                  600
+                                              ? 150.0
+                                              : 120.0),
+                                      child: Center(
+                                        child: (_showLocalLoading ||
+                                                _isConnectingState(
+                                                    state.playbackState))
+                                            ? SizedBox(
+                                                width: _isSmallPhone(context)
+                                                    ? 38.0
+                                                    : (MediaQuery.of(context)
+                                                                .size
+                                                                .shortestSide >
+                                                            600
+                                                        ? 64.0
+                                                        : 50.0),
+                                                height: _isSmallPhone(context)
+                                                    ? 38.0
+                                                    : (MediaQuery.of(context)
+                                                                .size
+                                                                .shortestSide >
+                                                            600
+                                                        ? 64.0
+                                                        : 50.0),
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  valueColor:
+                                                      AlwaysStoppedAnimation<
+                                                          Color>(Colors.white),
+                                                  strokeWidth: 4.0,
+                                                  strokeCap: StrokeCap.round,
+                                                ),
+                                              )
+                                            : Icon(
+                                                _getPlaybackIcon(
+                                                    state.playbackState),
+                                                size: _isSmallPhone(context)
+                                                    ? 90.0
+                                                    : (MediaQuery.of(context)
+                                                                .size
+                                                                .shortestSide >
+                                                            600
+                                                        ? 150.0
+                                                        : 120.0),
+                                                color: Colors.white,
+                                              ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                        // Error Display
-                        if (state.errorMessage != null) ...[
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Card(
-                              color:
-                                  Theme.of(context).colorScheme.errorContainer,
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline,
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        state.errorMessage!,
-                                        style:
-                                            AppTextStyles.bodyMedium.copyWith(
+                            // Error Display
+                            if (state.errorMessage != null) ...[
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Card(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .errorContainer,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.error_outline,
                                           color: Theme.of(context)
                                               .colorScheme
                                               .error,
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            state.errorMessage!,
+                                            style: AppTextStyles.bodyMedium
+                                                .copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.refresh),
+                                          onPressed: () {
+                                            context
+                                                .read<StreamBloc>()
+                                                .add(RetryStream());
+                                          },
+                                        ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.refresh),
-                                      onPressed: () {
-                                        context
-                                            .read<StreamBloc>()
-                                            .add(RetryStream());
-                                      },
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
                             ],
+                            // Flexible breathing room BELOW the play button —
+                            // equal flex to the spacer above keeps it centered.
+                            const Spacer(),
                           ],
                         ),
                       );

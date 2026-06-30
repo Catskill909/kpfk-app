@@ -84,7 +84,7 @@ class AppDrawer extends StatelessWidget {
     final iconSize = isSmallPhone ? 24.0 : 28.0;
     final listTileHorizontalPadding = isSmallPhone ? 12.0 : 24.0;
     final listTileVerticalPadding =
-        isSmallPhone ? 2.5 : 8.0; // Tighter spacing on small devices
+        isSmallPhone ? 2.0 : 4.0; // Tighter spacing between drawer items
 
     return Drawer(
       child: Container(
@@ -195,6 +195,27 @@ class AppDrawer extends StatelessWidget {
                       onTap: () {
                         Navigator.pop(context);
                         _launchUrl(StreamConstants.showArchiveUrl);
+                      },
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.podcasts, size: iconSize),
+                      title: Text(
+                        'Podcasts',
+                        style: AppTextStyles.drawerMenuItemForDevice(size)
+                            .copyWith(
+                          fontSize: isSmallPhone
+                              ? 16.0
+                              : 18.0, // Readable font for small devices
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: listTileHorizontalPadding,
+                          vertical: listTileVerticalPadding),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchUrl(StreamConstants.podcastsUrl);
                       },
                     ),
                     ListTile(
