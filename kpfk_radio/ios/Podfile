@@ -47,6 +47,12 @@ post_install do |installer|
         'PERMISSION_MICROPHONE=1',
         'PERMISSION_NOTIFICATIONS=1'
       ]
+
+      # swift-collections 1.1.1 (transitive dep of flutter_inappwebview_ios) trips a
+      # Swift 6 concurrency error. Keep it on the Swift 5 language mode to silence it.
+      if target.name == 'swift-collections'
+        config.build_settings['SWIFT_VERSION'] = '5.0'
+      end
     end
   end
 
