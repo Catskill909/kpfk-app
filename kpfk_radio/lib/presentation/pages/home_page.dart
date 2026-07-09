@@ -140,10 +140,12 @@ class _HomePageState extends State<HomePage> {
     return size.shortestSide < 380; // Phones smaller than iPhone XR
   }
 
-  // Measures the rendered height of the metadata text block (title + time +
-  // song/next) for the given width. Used by the layout so the image can be
-  // sized against the ACTUAL text height — the image only gives up space once
-  // the real content + reserves no longer fit, never just because text wrapped.
+  // Measures the rendered height of the metadata text block (the leading gap +
+  // title + time + song/next), matching the widgets below line-for-line. Used
+  // ONLY to know how much room the stacked content needs, so the image can be
+  // shrunk as a last resort when it doesn't fit — never to drive the image size
+  // when there IS room. The gap constants here must match the SizedBoxes in the
+  // text block below.
   double _measureMetadataHeight({
     required StreamBlocState state,
     required Size size,
@@ -357,83 +359,98 @@ class _HomePageState extends State<HomePage> {
           builder: (context, state) {
             return Stack(
               children: [
-                // Main content — locked (non-scrolling), vertically centered.
-                // The logo lives in a Flexible/AspectRatio so it shrinks to
-                // whatever vertical space remains after the text + play button,
-                // keeping the layout stable and fitting very small screens.
+                // Main content — a simple vertical stack: image, metadata, play
+                // button. The image size is `clamp(spaceLeft, floor, bigWidth)`:
+                //   • whenever there's room (spaceLeft ≥ bigWidth) the cap wins,
+                //     so the image is the big width-based square and CANNOT be
+                //     shrunk by text length — this is the guarantee every prior
+                //     attempt lacked; and
+                //   • only when the stacked content genuinely doesn't fit
+                //     (spaceLeft < bigWidth, e.g. a small phone with wrapped
+                //     text) does the image shrink, and by exactly the shortfall.
+                // Wrapped in a scroll view purely as a last-ditch safety for
+                // extreme accessibility font scaling.
                 Positioned.fill(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final mq = MediaQuery.of(context).size;
                       final bool small = _isSmallPhone(context);
                       final bool isTablet = mq.shortestSide > 600;
-                      // ----- Image sizing -----------------------------------
-                      // The image gets a width-based PREFERRED size and stays
-                      // there for every show; the breathing room around the play
-                      // button flexes to absorb differing text lengths. We only
-                      // shrink the image when the measured text + reserves can't
-                      // otherwise fit (small handsets).
                       final double hPad = small ? 8.0 : 16.0;
-                      final double contentW = constraints.maxWidth - hPad * 2;
-                      final double logoPreferred =
-                          mq.width * (small ? 0.95 : (isTablet ? 0.78 : 0.9));
+                      // bottomReserve only has to clear the floating donate /
+                      // alarm buttons, which are ~56px tall and sit in the
+                      // CORNERS — the centered play button never reaches them —
+                      // so it can be small. Keeping it at 90 was starving the
+                      // image (it's subtracted from the image's space budget).
+                      final double bottomReserve = small ? 40.0 : 48.0;
+                      final double topGap = small ? 12.0 : 16.0;
+                      final double gapAboveButton = small ? 20.0 : 28.0;
+                      final double gapBelowButton = small ? 12.0 : 24.0;
 
-                      // Fixed reserves: top gap, image→text gap, the guaranteed
-                      // breathing kept around the play button even in the worst
-                      // case, and the bottom strip left clear for the floating
-                      // donate / sleep-timer buttons.
-                      final double topReserve =
-                          small ? 8.0 : (isTablet ? 40.0 : 24.0);
-                      final double imgToTextGap = small ? 8.0 : 20.0;
-                      final double minBreath = small ? 16.0 : 36.0;
-                      final double bottomReserve = small ? 64.0 : 90.0;
-
-                      // Play button footprint (size must match the widget below).
+                      // Play button footprint (must match the widget below).
                       final double buttonSize =
                           small ? 90.0 : (isTablet ? 150.0 : 120.0);
                       final double buttonMargin = small ? 4.0 : 8.0;
                       final double buttonBlock = buttonSize + buttonMargin * 2;
 
-                      // Actual measured height of the metadata text block.
+                      // The BIG width-based square — the size the image WANTS to
+                      // be whenever there is room. This is the UPPER CAP of the
+                      // clamp below, so the image can never grow past it and,
+                      // crucially, can never be forced BELOW it while space
+                      // remains.
+                      final double bigWidthSize =
+                          mq.width * (small ? 0.8 : (isTablet ? 0.72 : 0.85));
+
+                      // Measure the real stacked content so we know how much
+                      // vertical room is actually left for the image.
+                      final double contentW = constraints.maxWidth - hPad * 2;
                       final double textBlockH = _measureMetadataHeight(
                         state: state,
                         size: mq,
                         small: small,
                         maxWidth: contentW,
                       );
-
-                      // What's left for the image after everything else; the
-                      // image takes its preferred size unless that budget is
-                      // smaller (then it shrinks to fit — and no further than a
-                      // sensible floor).
-                      final double columnH =
+                      final double viewportH =
                           constraints.maxHeight - bottomReserve;
-                      final double imageBudget = columnH -
-                          topReserve -
-                          imgToTextGap -
+                      final double spaceLeftForImage = viewportH -
+                          topGap -
                           textBlockH -
+                          gapAboveButton -
                           buttonBlock -
-                          minBreath;
-                      final double logoSize = imageBudget
-                          .clamp(small ? 80.0 : 120.0, logoPreferred)
+                          gapBelowButton;
+
+                      // THE rule — big when it fits, shrink ONLY as a last resort:
+                      //   • room to spare  → spaceLeft > bigWidthSize → cap wins
+                      //                       → image = bigWidthSize (never shrinks)
+                      //   • genuinely tight → spaceLeft < bigWidthSize
+                      //                       → image = spaceLeft (shrinks to fit)
+                      final double logoSize = spaceLeftForImage
+                          .clamp(small ? 80.0 : 120.0, bigWidthSize)
                           .toDouble();
-                      return Padding(
+                      return SingleChildScrollView(
                         padding: EdgeInsets.only(
                           left: hPad,
                           right: hPad,
-                          // Reserve room for the floating bottom buttons.
+                          // Clear the floating donate / sleep-timer buttons.
                           bottom: bottomReserve,
                         ),
-                        child: Column(
-                          children: [
-                            SizedBox(height: topReserve),
-                            // Station image — fixed square size (logoSize),
-                            // computed above so it stays constant across shows
-                            // and only shrinks to fit small screens.
-                            SizedBox(
-                              width: logoSize,
-                              height: logoSize,
-                              child: GestureDetector(
+                        child: ConstrainedBox(
+                          // Fill at least the viewport so the column can center
+                          // its content vertically when there is room to spare.
+                          // (Only a last-ditch scroll if even the floored image +
+                          // content can't fit — e.g. huge accessibility fonts.)
+                          constraints: BoxConstraints(minHeight: viewportH),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(height: topGap),
+                              // Station image — fixed WIDTH-based square. Stays
+                              // the same size across every show, regardless of
+                              // how many lines the metadata wraps to.
+                              SizedBox(
+                                width: logoSize,
+                                height: logoSize,
+                                child: GestureDetector(
                                 onTap: state.metadata != null
                                     ? () {
                                         setState(() {
@@ -526,11 +543,8 @@ class _HomePageState extends State<HomePage> {
                                 textAlign: TextAlign.center,
                               ),
                             ],
-                            // Flexible breathing room ABOVE the play button.
-                            // Pairs with the equal Spacer below so the button
-                            // stays centered; both collapse first when a long
-                            // text block needs the room.
-                            const Spacer(),
+                            // Breathing between the metadata and the play button.
+                            SizedBox(height: gapAboveButton),
                             // Playback Control with Loading State
                             Container(
                               alignment: Alignment.center,
@@ -707,10 +721,11 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             ],
-                            // Flexible breathing room BELOW the play button —
-                            // equal flex to the spacer above keeps it centered.
-                            const Spacer(),
-                          ],
+                            // Breathing below the play button before the
+                            // floating donate / sleep-timer strip.
+                            SizedBox(height: gapBelowButton),
+                            ],
+                          ),
                         ),
                       );
                     },
