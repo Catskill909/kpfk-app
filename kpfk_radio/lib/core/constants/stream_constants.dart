@@ -35,8 +35,7 @@ class StreamConstants {
   static const String podcastsUrl = 'https://podcasts.kpfk.org';
   static const String donateUrl = 'https://docs.pacifica.org/kpfk/donate/';
   static const String aboutUrl = 'https://www.kpfk.org/';
-  static const String pacificaUrl =
-      'https://pacificanetwork.org/about-pacifica-foundation/pacifica-foundation/';
+  static const String pacificaUrl = 'https://www.pacifica.org/about_mission.php';
   static const String privacyPolicyUrl =
       'https://docs.pacifica.org/kpfk/kpfk-privacy.php';
 
