@@ -16,9 +16,26 @@ if (flutterRoot == null) {
     throw GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
 }
 
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
+// Auto-increment versionCode from the git commit count so every release is
+// guaranteed to be higher than the last, preventing Play's "Version code N has
+// already been used" rejection. Falls back to the pubspec build number
+// (flutter.versionCode) if git is unavailable, e.g. a CI checkout without .git.
+def flutterVersionCode
+try {
+    def stdout = new ByteArrayOutputStream()
+    exec {
+        commandLine 'git', 'rev-list', '--count', 'HEAD'
+        standardOutput = stdout
+    }
+    flutterVersionCode = stdout.toString().trim()
+    if (flutterVersionCode.isEmpty()) {
+        throw new RuntimeException("empty git commit count")
+    }
+} catch (Exception e) {
+    flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+    if (flutterVersionCode == null) {
+        flutterVersionCode = '1'
+    }
 }
 
 def flutterVersionName = localProperties.getProperty('flutter.versionName')
