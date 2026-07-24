@@ -157,7 +157,7 @@ class StreamRepository {
     // Listen for metadata updates
     _metadataSubscription = _metadataService.metadataStream.listen(
       (metadata) {
-        LoggerService.info(
+        LoggerService.debug(
             '🎵 StreamRepository: RECEIVED METADATA: Show=${metadata.current.showName}, Host=${metadata.current.host}');
         _currentMetadata = metadata;
         _metadataController.add(metadata);
@@ -494,10 +494,10 @@ class StreamRepository {
     final showInfo = metadata.current;
 
     // CRITICAL DEBUG: Log exactly what metadata we have
-    LoggerService.info(
+    LoggerService.debug(
         '🎵 RAW METADATA: Show="${showInfo.showName}", Host="${showInfo.host}"');
     if (showInfo.hasSongInfo) {
-      LoggerService.info(
+      LoggerService.debug(
           '🎵 SONG INFO: Title="${showInfo.songTitle}", Artist="${showInfo.songArtist}"');
     }
 
@@ -534,7 +534,7 @@ class StreamRepository {
           showInfo.hostImage != null ? Uri.parse(showInfo.hostImage!) : null,
     );
 
-    LoggerService.info(
+    LoggerService.debug(
         '🎵 SENDING TO LOCKSCREEN: Title="$title", Artist="$artist"');
 
     // audio_service drives Android + is the iOS fallback.

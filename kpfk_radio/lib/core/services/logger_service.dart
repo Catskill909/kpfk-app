@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
 class LoggerService {
@@ -8,23 +9,25 @@ class LoggerService {
   static void init() {
     if (_initialized) return;
 
-    Logger.root.level = Level.ALL;
+    // Debug builds: show INFO and above (FINE/debug diagnostics are dropped so
+    // the console isn't flooded by per-tick playback/metadata logs).
+    // Release builds: only SEVERE records reach the handler, and nothing is
+    // printed to the console — production must not spam logcat.
+    Logger.root.level = kDebugMode ? Level.INFO : Level.SEVERE;
     Logger.root.onRecord.listen((record) {
-      // In development, print to console
-      // In production, this could be integrated with a crash reporting service
-      final message = '${record.level.name}: ${record.time}: '
-          '${record.loggerName}: ${record.message}';
-
       if (record.error != null) {
-        // Handle errors differently if needed
+        // Route errors to the uncaught-error handler (crash reporting hook).
         Zone.current.handleUncaughtError(
             record.error!, record.stackTrace ?? StackTrace.empty);
       }
 
-      // Add your preferred logging destination here
-      // For now, we'll use print in a more structured way
-      // ignore: avoid_print
-      print(message);
+      // Only print to the console during development.
+      if (kDebugMode) {
+        final message = '${record.level.name}: ${record.time}: '
+            '${record.loggerName}: ${record.message}';
+        // ignore: avoid_print
+        print(message);
+      }
     });
 
     _initialized = true;

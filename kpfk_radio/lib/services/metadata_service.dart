@@ -67,7 +67,7 @@ class MetadataService {
   Future<void> _fetchMetadata() async {
     try {
       final metadata = await _fetchFromApi();
-      LoggerService.info(
+      LoggerService.debug(
           '🎵 Periodic fetch SUCCESS: Show="${metadata.current.showName}", Host="${metadata.current.host}"');
       _updateMetadata(metadata);
     } catch (e, stackTrace) {
@@ -115,11 +115,12 @@ class MetadataService {
   }
 
   void _updateMetadata(StreamMetadata metadata) {
-    LoggerService.info('🎵 MetadataService: Pushing metadata update to stream');
-    LoggerService.info(
+    LoggerService.debug(
+        '🎵 MetadataService: Pushing metadata update to stream');
+    LoggerService.debug(
         '🎵 SHOW: "${metadata.current.showName}", HOST: "${metadata.current.host}"');
     if (metadata.current.hasSongInfo) {
-      LoggerService.info(
+      LoggerService.debug(
           '🎵 SONG: "${metadata.current.songTitle}", ARTIST: "${metadata.current.songArtist}"');
     }
 

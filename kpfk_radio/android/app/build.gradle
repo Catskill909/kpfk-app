@@ -82,8 +82,12 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
+            // R8 disabled: enabling minify broke the media notification tray
+            // controls on device. The Play "no deobfuscation file" notice is a
+            // non-blocking warning, not a requirement. Revisit with proper
+            // audio_service/just_audio keep rules before re-enabling.
             minifyEnabled false
-            shrinkResources false  // Explicitly disable resource shrinking for debug builds
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {

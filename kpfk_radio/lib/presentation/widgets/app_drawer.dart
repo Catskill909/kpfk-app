@@ -197,27 +197,9 @@ class AppDrawer extends StatelessWidget {
                         _launchUrl(StreamConstants.showArchiveUrl);
                       },
                     ),
-                    ListTile(
-                      leading: Icon(Icons.podcasts, size: iconSize),
-                      title: Text(
-                        'Podcasts',
-                        style: AppTextStyles.drawerMenuItemForDevice(size)
-                            .copyWith(
-                          fontSize: isSmallPhone
-                              ? 16.0
-                              : 18.0, // Readable font for small devices
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: listTileHorizontalPadding,
-                          vertical: listTileVerticalPadding),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchUrl(StreamConstants.podcastsUrl);
-                      },
-                    ),
+                    // TEMPORARILY REMOVED: Podcasts item hidden until the
+                    // podcasts site is ready. Restore this ListTile (and the
+                    // StreamConstants.podcastsUrl constant) once it's live.
                     ListTile(
                       leading: Icon(Icons.attach_money, size: iconSize),
                       title: Text(

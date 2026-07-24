@@ -8,7 +8,6 @@ import '../../core/constants/stream_constants.dart';
 import '../../core/services/logger_service.dart';
 import '../../core/utils/m3u_parser.dart';
 import '../../data/models/stream_metadata.dart';
-import '../samsung_media_session_service.dart';
 
 /// Handles all audio-related operations including background playback
 /// Modified to use a permanent dummy MediaItem to prevent just_audio_background
@@ -163,7 +162,7 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         mediaItem.listen((item) {
           final t = item?.title ?? '';
           final a = item?.artist ?? '';
-          LoggerService.info(
+          LoggerService.debug(
               '🤖 ANDROID DIAG: mediaItem changed -> title="$t" artist="$a"');
         });
         playbackState.listen((state) {
@@ -254,10 +253,10 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (pushSignature != _lastPushedMediaSignature) {
       _lastPushedMediaSignature = pushSignature;
       mediaItem.add(effectiveItem);
-      LoggerService.info(
+      LoggerService.debug(
           '🎯 ONE TRUTH: _broadcastState pushed MediaItem=${effectiveItem?.title ?? "<null>"}, playing=${_player.playing}, state=${_player.processingState}');
     } else {
-      LoggerService.info(
+      LoggerService.debug(
           '🎯 ONE TRUTH: _broadcastState skipped redundant MediaItem push (unchanged) - playing=${_player.playing}, state=${_player.processingState}');
     }
   }
@@ -495,28 +494,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Our Swift implementation will handle the lockscreen metadata
       _updateMediaSession(_player.playing, _currentMediaItem!);
 
-      // CRITICAL: Update Samsung MediaSession playback state
-      // This is the native Android MediaSession that Samsung J7 requires
-      await SamsungMediaSessionService.updatePlaybackState(true);
-
-      // DELAY FIX: Wait for current metadata before showing Samsung notification
-      if (_currentMetadata != null) {
-        LoggerService.info(
-            '🔍 METADATA DELAY FIX: Using existing metadata for Samsung notification');
-        await SamsungMediaSessionService.updateMetadata(
-          _currentMetadata!.currentSong,
-          _currentMetadata!.artist,
-        );
-      } else {
-        LoggerService.info(
-            '🔍 METADATA DELAY FIX: No metadata available yet - Samsung will show static until metadata arrives');
-      }
-
-      // STANDARD BEHAVIOR: Show notification only when PLAYING starts
-      await SamsungMediaSessionService.showNotification();
-      LoggerService.info(
-          '🔍 SAMSUNG DEBUG: Notification shown because PLAY was pressed (STANDARD)');
-
       if (Platform.isAndroid) {
         _debugDumpAndroidState('play:afterUpdateSession');
       }
@@ -552,15 +529,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // CRITICAL: Use our dummy MediaItem to update playback state only
       // Our Swift implementation will handle the lockscreen metadata
       _updateMediaSession(_player.playing, _currentMediaItem!);
-
-      // CRITICAL: Update Samsung MediaSession playback state
-      // This is the native Android MediaSession that Samsung J7 requires
-      await SamsungMediaSessionService.updatePlaybackState(false);
-
-      // STANDARD BEHAVIOR: Hide notification when PAUSED (like other apps)
-      await SamsungMediaSessionService.hideNotification();
-      LoggerService.info(
-          '🔍 SAMSUNG DEBUG: Notification hidden because PAUSE was pressed (STANDARD)');
 
       // Explicitly broadcast updated state so the notification button flips to
       // play when pause is triggered from the notification tray (the event
@@ -601,11 +569,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final session = await AudioSession.instance;
       await session.setActive(false);
       LoggerService.info('🎯 SAMSUNG FIX: Audio focus released on stop');
-
-      // Hide Samsung notification completely
-      await SamsungMediaSessionService.hideNotification();
-      LoggerService.info(
-          '🔍 SAMSUNG DEBUG: Notification hidden because STOP was pressed');
 
       // Set playback state to idle and clear MediaItem to remove from tray
       playbackState.add(playbackState.value.copyWith(
@@ -725,13 +688,6 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         '🎯 ONE TRUTH: Updated _currentMediaItem with real metadata: "$title" by "$artist"');
     LoggerService.info(
         '🎯 ONE TRUTH: Next _broadcastState call will use this updated MediaItem');
-
-    // CRITICAL: Update Samsung MediaSession with real metadata
-    LoggerService.info(
-        '🔍 SAMSUNG DEBUG: Calling SamsungMediaSessionService.updateMetadata("$title", "$artist")');
-    await SamsungMediaSessionService.updateMetadata(title, artist);
-    LoggerService.info(
-        '🔍 SAMSUNG DEBUG: SamsungMediaSessionService.updateMetadata() completed');
   }
 
   /// Updates only the playback state without changing metadata
@@ -884,7 +840,7 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> updateMediaItem(MediaItem mediaItem) async {
-    LoggerService.info(
+    LoggerService.debug(
         '✅ STANDARD FLUTTER: updateMediaItem() called with title="${mediaItem.title}", artist="${mediaItem.artist}"');
 
     // STANDARD APPROACH: Let audio_service handle lockscreen on ALL platforms!
@@ -905,9 +861,9 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       this.mediaItem.add(mediaItem); // ✅ LET THE FRAMEWORK DO ITS JOB!
     }
 
-    LoggerService.info(
+    LoggerService.debug(
         '✅ STANDARD FLUTTER: MediaItem set - audio_service will handle lockscreen/notification');
-    LoggerService.info(
+    LoggerService.debug(
         '✅ Artwork URL: ${mediaItem.artUri?.toString() ?? "none"}');
   }
 
@@ -920,7 +876,7 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final pb = playbackState.value;
       final mi = mediaItem.valueOrNull;
       final tag = _currentMediaItem; // Simplified: use current MediaItem
-      LoggerService.info(
+      LoggerService.debug(
           '🤖 ANDROID DIAG [$where]: player.playing=$isPlaying, player.state=$ps, '
           'pb.playing=${pb.playing}, pb.state=${pb.processingState}, '
           'mi.title="${mi?.title ?? ''}", mi.artist="${mi?.artist ?? ''}", '
