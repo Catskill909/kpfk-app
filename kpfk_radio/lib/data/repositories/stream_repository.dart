@@ -12,6 +12,7 @@ import '../../services/metadata_service.dart';
 import '../../services/metadata_service_native.dart';
 import '../../services/ios_lockscreen_service.dart';
 import '../../core/constants/stream_constants.dart';
+import '../../domain/models/stream_notice.dart';
 
 enum StreamState {
   initial,
@@ -40,10 +41,15 @@ class StreamRepository {
 
   final _stateController = StreamController<StreamState>.broadcast();
   final _metadataController = StreamController<StreamMetadata>.broadcast();
-  // Emits a message when a server-specific error occurs (Icecast down, stream
-  // not found, etc.) and null when it's cleared. Drives the server-error modal,
-  // distinct from generic playback errors. See play-button-fix.md Phase 9.
-  final _serverErrorController = StreamController<String?>.broadcast();
+  // The ONE channel that tells the UI why audio isn't playing: a StreamNotice
+  // when something goes wrong, null when it's cleared. A confirmed server
+  // outage emits kind `outage`; anything we couldn't pin on the server (network
+  // blip, captive-portal TLS interception, reconnect exhausted against a server
+  // that probes healthy) emits kind `connection`. Both render through the same
+  // modal — there is no second, quieter surface. Before this was unified, the
+  // `connection` paths set the error state and emitted nothing at all, so the
+  // listener got a spinner that stopped and no explanation whatsoever.
+  final _noticeController = StreamController<StreamNotice?>.broadcast();
 
   StreamState _currentState = StreamState.initial;
   StreamMetadata? _currentMetadata;
@@ -83,7 +89,13 @@ class StreamRepository {
             '🎵 StreamRepository: Preserving current metadata: ${savedMetadata?.current.showName}');
       }
 
-      // Stop playback and metadata polling
+      // Stop playback and metadata polling. Clearing _awaitingPlay matters:
+      // this runs from the sleep timer / app-close / network recovery, any of
+      // which can land mid play attempt. _updateState deliberately does NOT
+      // clear the flag on `initial`, so without this it stays latched true and
+      // the next `ready && !playing` maps to buffering — a spinner that never
+      // resolves. (Ported from WBAI, which already had this.)
+      _awaitingPlay = false;
       await _audioHandler.stop();
       _metadataService.stopFetching();
 
@@ -121,6 +133,13 @@ class StreamRepository {
         }
       }
 
+      // We're back to a clean, playable state, so any notice describing the
+      // old fault is stale. Network recovery routes through here, which means
+      // a "can't reach the stream" modal raised while offline (and hidden
+      // behind NetworkLostAlert) clears itself instead of being revealed as a
+      // stale modal the moment the connection returns. NOT a user dismissal,
+      // so the _noticeDismissed latch is deliberately left alone.
+      _emitNotice(null);
       _updateState(StreamState.initial);
       _metadataService.startFetching();
 
@@ -136,7 +155,7 @@ class StreamRepository {
   // Public streams
   Stream<StreamState> get stateStream => _stateController.stream;
   Stream<StreamMetadata> get metadataStream => _metadataController.stream;
-  Stream<String?> get serverErrorStream => _serverErrorController.stream;
+  Stream<StreamNotice?> get noticeStream => _noticeController.stream;
 
   // Current values
   StreamState get currentState => _currentState;
@@ -164,8 +183,11 @@ class StreamRepository {
         _updateMediaMetadata(metadata);
       },
       onError: (error) {
-        LoggerService.streamError('Metadata error', error);
-        _updateState(StreamState.error);
+        // Log only. A failed *metadata* poll says nothing about playback —
+        // audio is very often still streaming fine. Flipping playback state to
+        // `error` here made a transient show-info fetch failure knock the play
+        // button out of its playing state mid-stream.
+        LoggerService.streamError('Metadata error (playback unaffected)', error);
       },
     );
 
@@ -245,6 +267,9 @@ class StreamRepository {
       // UI immediately and let the player connect. The old pre-flight GET added
       // ~2s of fixed latency in front of every play; just_audio surfaces real
       // connection/stream errors which we classify on the failure path below.
+      // A fresh, explicit play attempt clears the dismiss latch so a genuinely
+      // new outage can surface the modal again.
+      _noticeDismissed = false;
       _awaitingPlay = true;
       _updateState(StreamState.connecting);
 
@@ -297,6 +322,36 @@ class StreamRepository {
   // (the classification itself drives more playback-state transitions).
   bool _handlingPlayerError = false;
 
+  /// Push a notice (or null to clear) to the UI. Guards against emitting after
+  /// dispose, which the reconnect/watchdog timers can otherwise still attempt.
+  void _emitNotice(StreamNotice? notice) {
+    if (_noticeController.isClosed) return;
+    _noticeController.add(notice);
+  }
+
+  /// Surface a playback failure we could NOT pin on the server: move to the
+  /// error state, then raise the `connection` notice. Honours the same dismiss
+  /// latch as an outage, so a notice the user just closed can't pop straight
+  /// back from a late-arriving error on the same failed attempt.
+  void _emitConnectionNotice(String reason) {
+    LoggerService.warning(
+        '🎵 StreamRepository: Connection notice ($reason)');
+    _updateState(StreamState.error);
+    if (_noticeDismissed) {
+      LoggerService.info(
+          '🎵 StreamRepository: Connection notice suppressed (user dismissed)');
+      return;
+    }
+    _emitNotice(const StreamNotice.connection());
+  }
+
+  // Dismiss latch: once the user taps "Got it" on the server-error modal, we
+  // stop re-surfacing the SAME outage (the reconnect loop / player-error path
+  // would otherwise re-emit and the modal would pop straight back, looking
+  // undismissable). Reset on the next explicit play() so a new attempt can
+  // surface a fresh outage.
+  bool _noticeDismissed = false;
+
   /// Classify a player error (reconnect exhausted) and surface it: a real
   /// server outage shows the modal; anything else stays a generic error.
   Future<void> _onPlayerError() async {
@@ -313,13 +368,21 @@ class StreamRepository {
         LoggerService.info(
             '🎵 StreamRepository: Player error is a server outage (${health.errorType}) - showing modal');
         await _handleServerError(health);
+      } else {
+        // Reconnect exhausted, yet the server probes fine — something between
+        // us and it (or the player itself) is at fault. Still a dead end for
+        // the listener, so it gets the retryable notice rather than silence.
+        _emitConnectionNotice('reconnect exhausted, server probes healthy');
       }
     } on NetworkConnectivityException catch (ne) {
-      // Network issue, not a server issue — leave as a generic error.
+      // Network issue, not a server issue — retryable notice, not the outage
+      // modal (the station may well be fine).
       LoggerService.info(
           '🎵 StreamRepository: Player error during network issue: $ne');
+      _emitConnectionNotice('network issue while classifying player error');
     } catch (e) {
       LoggerService.streamError('Error classifying player error', e);
+      _emitConnectionNotice('unclassifiable player error');
     } finally {
       _handlingPlayerError = false;
     }
@@ -345,11 +408,13 @@ class StreamRepository {
             '🎵 StreamRepository: Watchdog - server healthy, continuing to wait for connection');
       }
     } on NetworkConnectivityException catch (ne) {
-      // Network issue, not a server issue — surface a plain error, no modal.
+      // Network issue, not a server issue — the retryable notice, not the
+      // outage one. Previously this set the error state and said nothing, so
+      // the spinner just stopped with no explanation.
       LoggerService.info(
           '🎵 StreamRepository: Watchdog network connectivity issue: $ne');
       _audioHandler.haltReconnect();
-      _updateState(StreamState.error);
+      _emitConnectionNotice('watchdog network connectivity issue');
     }
   }
 
@@ -377,12 +442,13 @@ class StreamRepository {
         return;
       }
     } on NetworkConnectivityException catch (ne) {
-      // Network issue, not a server issue — no server-error modal.
+      // Network issue, not a server issue — falls through to the retryable
+      // notice below rather than the outage modal.
       LoggerService.info(
           '🎵 StreamRepository: Network connectivity issue during failure classification: $ne');
     }
 
-    _updateState(StreamState.error);
+    _emitConnectionNotice('playback failure, server not confirmed down');
   }
 
   Future<void> pause({AudioCommandSource? source}) async {
@@ -426,6 +492,11 @@ class StreamRepository {
     try {
       await stop();
       await Future.delayed(const Duration(seconds: 1));
+      // stop() halts metadata polling and play() does not restart it, so
+      // without this a retry leaves the show name/host frozen at whatever was
+      // last fetched. Now that "Try again" is a button on the notice modal
+      // this path is a normal thing for a listener to hit, not a rarity.
+      restartMetadataService();
       await play();
     } catch (e) {
       LoggerService.streamError('Error retrying stream', e);
@@ -580,6 +651,14 @@ class StreamRepository {
 
   /// Handle server-specific errors and reset audio controls
   Future<void> _handleServerError(AudioServerHealthResult healthResult) async {
+    // If the user already dismissed this outage, don't resurrect the modal.
+    // A fresh play() clears the latch and lets a new outage surface.
+    if (_noticeDismissed) {
+      LoggerService.info(
+          '🎵 StreamRepository: Server error suppressed (user dismissed) - not re-showing modal');
+      return;
+    }
+
     LoggerService.info(
         '🎵 StreamRepository: Handling server error: ${healthResult.errorType}');
 
@@ -622,12 +701,21 @@ class StreamRepository {
     // Reset audio controls and clear lockscreen
     await _resetAudioControlsForServerError();
 
+    // Re-check the dismiss latch AFTER the awaits above: the user may have
+    // tapped "Got it" while this handler was mid-reset. Without this a stale,
+    // already-in-flight error would re-raise the modal we just closed.
+    if (_noticeDismissed) {
+      LoggerService.info(
+          '🎵 StreamRepository: Dismissed during handling - not re-raising modal');
+      return;
+    }
+
     // Update audio state manager
     AudioStateManager().handleServerError(audioState, errorMessage);
 
-    // Signal the UI to show the server-error modal (distinct from a generic
-    // playback error). The bloc maps this to showServerErrorModal.
-    _serverErrorController.add(errorMessage);
+    // Signal the UI: a confirmed outage. The raw message rides along as the
+    // modal's muted detail line, never as its headline.
+    _emitNotice(StreamNotice.outage(detail: errorMessage));
 
     // Update local stream state
     _updateState(StreamState.error);
@@ -688,13 +776,17 @@ class StreamRepository {
     return null;
   }
 
-  /// Clear server error state and allow retry
-  void clearServerError() {
-    LoggerService.info('🎵 StreamRepository: Clearing server error state');
+  /// Dismiss the active notice and allow a fresh retry.
+  void dismissNotice() {
+    LoggerService.info('🎵 StreamRepository: Dismissing stream notice');
+    // Latch the dismissal and stop the background reconnect loop so it can't
+    // keep hammering the dead server and re-raise the modal we just closed.
+    _noticeDismissed = true;
+    _audioHandler.haltReconnect();
     AudioStateManager().clearServerError();
     AudioServerHealthChecker
         .clearCache(); // Clear health check cache for fresh retry
-    _serverErrorController.add(null); // Hide the server-error modal
+    _emitNotice(null); // Hide the notice modal
     _updateState(StreamState.initial);
   }
 
@@ -735,7 +827,7 @@ class StreamRepository {
     _playbackStateSubscription?.cancel();
     _stateController.close();
     _metadataController.close();
-    _serverErrorController.close();
+    _noticeController.close();
     _metadataService.dispose();
     // Also dispose the native metadata service to clean up any active timers
     _nativeMetadataService.dispose();

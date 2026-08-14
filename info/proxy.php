@@ -27,7 +27,6 @@ $response = curl_exec($ch);
 if (strlen($response) > 1000000) { // Limit response size to 1MB for example
     header('HTTP/1.1 413 Payload Too Large');
     echo json_encode(['error' => 'Response too large.']);
-    curl_close($ch);
     exit;
 }
 
@@ -36,11 +35,8 @@ if ($response === false) {
     $error = curl_error($ch);
     header('HTTP/1.1 502 Bad Gateway');
     echo json_encode(['error' => 'Failed to fetch data from KPFT API.', 'curl_error' => $error]);
-    curl_close($ch);
     exit;
 }
-
-curl_close($ch);
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *'); // Adjust as per your CORS policy

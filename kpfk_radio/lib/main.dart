@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:audio_service/audio_service.dart';
@@ -24,6 +26,22 @@ Future<void> main() async {
   // Preserve splash screen while initializing
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // TYPOGRAPHY: Oswald + Poppins ship in assets/fonts/, so google_fonts must
+  // never reach out to fonts.gstatic.com at runtime. Two reasons: the app then
+  // renders correctly on a cold first launch with no connectivity (the notice
+  // modal that says "check your internet connection" would otherwise be drawn
+  // in a system fallback face), and the app makes no unannounced third-party
+  // network call on startup.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(() async* {
+    for (final family in <String>['Oswald', 'Poppins']) {
+      yield LicenseEntryWithLineBreaks(
+        <String>[family],
+        await rootBundle.loadString('assets/fonts/OFL-$family.txt'),
+      );
+    }
+  });
 
   // Lock orientation to portrait on all devices (phone and tablet).
   // portraitUp only, to match the iOS Info.plist (no upside-down).

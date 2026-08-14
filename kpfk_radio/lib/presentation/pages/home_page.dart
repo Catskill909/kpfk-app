@@ -7,8 +7,9 @@ import '../../data/repositories/stream_repository.dart';
 import '../theme/font_constants.dart';
 import 'pacifica_apps_page.dart';
 import '../widgets/app_drawer.dart';
-import '../widgets/audio_server_error_modal.dart';
+import '../widgets/stream_notice_modal.dart';
 import '../widgets/show_info_modal.dart';
+import '../../domain/models/stream_notice.dart';
 import '../bloc/connectivity_cubit.dart';
 import '../widgets/donate_webview_sheet.dart';
 import '../widgets/sleep_timer_overlay.dart';
@@ -40,6 +41,7 @@ class _HomePageState extends State<HomePage> {
   // Track last announced states to reduce repeated announcements
   StreamState? _lastAnnouncedPlayback;
   String? _lastAnnouncedShow;
+  StreamNotice? _lastAnnouncedNotice;
 
   Widget _buildLoadingContainer(String message) {
     return Container(
@@ -335,25 +337,21 @@ class _HomePageState extends State<HomePage> {
               SemanticsService.sendAnnouncement(View.of(context), msg, dir);
             }
 
-            if (state.errorMessage != null && !state.showServerErrorModal) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    state.errorMessage!,
-                    style: AppTextStyles.bodyMedium,
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  action: SnackBarAction(
-                    label: 'Retry',
-                    onPressed: () {
-                      context.read<StreamBloc>().add(RetryStream());
-                    },
-                  ),
-                ),
-              );
-              // Announce error message for screen readers
-              SemanticsService.sendAnnouncement(View.of(context),
-                  state.errorMessage!, Directionality.of(context));
+            // A notice is shown by the modal and nothing else — no snackbar,
+            // no inline card. One explanation, on screen until acknowledged.
+            // (A snackbar self-dismisses, so the one explanation a listener
+            // gets vanishes if they happened to look away.)
+            if (state.notice != _lastAnnouncedNotice) {
+              _lastAnnouncedNotice = state.notice;
+              if (state.notice != null) {
+                SemanticsService.sendAnnouncement(
+                  View.of(context),
+                  state.notice!.kind == StreamNoticeKind.outage
+                      ? "We'll be right back. Our live stream is temporarily offline."
+                      : "Can't reach the stream. Check your internet connection, then try again.",
+                  Directionality.of(context),
+                );
+              }
             }
           },
           builder: (context, state) {
@@ -675,52 +673,12 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             ),
-                            // Error Display
-                            if (state.errorMessage != null) ...[
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Card(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .errorContainer,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.error_outline,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .error,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            state.errorMessage!,
-                                            style: AppTextStyles.bodyMedium
-                                                .copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .error,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.refresh),
-                                          onPressed: () {
-                                            context
-                                                .read<StreamBloc>()
-                                                .add(RetryStream());
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            // NOTE: no inline error card here. Errors are shown
+                            // by StreamNoticeModal and nowhere else. An inline
+                            // card also sat inside this Column WITHOUT being
+                            // counted in spaceLeftForImage above, so whenever
+                            // it appeared it pushed the layout and shrank the
+                            // station image.
                             // Breathing below the play button before the
                             // floating donate / sleep-timer strip.
                             SizedBox(height: gapBelowButton),
@@ -843,13 +801,16 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                // Audio Server Error Modal
-                if (state.showServerErrorModal)
-                  AudioServerErrorModal(
+                // The single surface for "here's why audio isn't playing".
+                if (state.notice != null)
+                  StreamNoticeModal(
+                    notice: state.notice!,
                     onDismiss: () {
-                      context.read<StreamBloc>().add(ClearServerError());
+                      context.read<StreamBloc>().add(DismissStreamNotice());
                     },
-                    customMessage: state.errorMessage,
+                    onRetry: () {
+                      context.read<StreamBloc>().add(RetryStream());
+                    },
                   ),
 
                 // Show Info Modal

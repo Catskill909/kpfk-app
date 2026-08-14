@@ -7,8 +7,6 @@ class StreamConstants {
   static const String legacyStreamUrl =
       'https://streams.pacifica.org:9000/kpfk_128';
 
-  static const String metadataUrl = 'http://localhost:8000/proxy.php';
-  static const String proxyUrl = 'http://localhost:8000/proxy.php';
   static const String hostImageUrl = 'https://confessor.kpfk.org/';
 
   // Audio Configuration
@@ -50,6 +48,7 @@ class StreamConstants {
   static const String emailAddress = 'gm@kpfk.org';
 
   // Error Messages
+
   static const String connectionError =
       'Connection lost. Attempting to reconnect...';
   static const String bufferError = 'Buffering... Please wait.';
