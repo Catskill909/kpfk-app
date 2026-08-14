@@ -25,7 +25,30 @@ enum StreamState {
   error,
 }
 
-class StreamRepository {
+/// What the presentation layer needs from the audio pipeline.
+///
+/// [StreamRepository] is the real implementation. This exists so the bloc can
+/// be driven by a fake in tests: the real repository builds a just_audio player
+/// and audio_service handler in its constructor, which can't run headless — and
+/// the questions worth testing ("does an outage raise the modal?", and just as
+/// importantly "does normal playback leave it alone?") are all about how the
+/// UI reacts to these streams, not about the player itself.
+abstract interface class StreamSource {
+  Stream<StreamState> get stateStream;
+  Stream<StreamMetadata> get metadataStream;
+  Stream<StreamNotice?> get noticeStream;
+
+  Future<void> play({AudioCommandSource? source});
+  Future<void> pause({AudioCommandSource? source});
+  Future<void> stop();
+  Future<void> retry();
+
+  /// The listener acknowledged the notice: latch the dismissal and stop the
+  /// reconnect loop so it can't immediately re-raise what was just closed.
+  void dismissNotice();
+}
+
+class StreamRepository implements StreamSource {
   final KPFKAudioHandler _audioHandler;
   final MetadataService _metadataService;
   final NativeMetadataService _nativeMetadataService;
@@ -153,8 +176,11 @@ class StreamRepository {
   }
 
   // Public streams
+  @override
   Stream<StreamState> get stateStream => _stateController.stream;
+  @override
   Stream<StreamMetadata> get metadataStream => _metadataController.stream;
+  @override
   Stream<StreamNotice?> get noticeStream => _noticeController.stream;
 
   // Current values
@@ -258,6 +284,7 @@ class StreamRepository {
   // This method was causing excessive metadata updates
   // Now we only update metadata when actual metadata changes in _updateMediaMetadata
 
+  @override
   Future<void> play({AudioCommandSource? source}) async {
     try {
       LoggerService.info(
@@ -451,6 +478,7 @@ class StreamRepository {
     _emitConnectionNotice('playback failure, server not confirmed down');
   }
 
+  @override
   Future<void> pause({AudioCommandSource? source}) async {
     try {
       LoggerService.info(
@@ -475,6 +503,7 @@ class StreamRepository {
     }
   }
 
+  @override
   Future<void> stop() async {
     try {
       _awaitingPlay = false;
@@ -488,6 +517,7 @@ class StreamRepository {
     }
   }
 
+  @override
   Future<void> retry() async {
     try {
       await stop();
@@ -777,6 +807,7 @@ class StreamRepository {
   }
 
   /// Dismiss the active notice and allow a fresh retry.
+  @override
   void dismissNotice() {
     LoggerService.info('🎵 StreamRepository: Dismissing stream notice');
     // Latch the dismissal and stop the background reconnect loop so it can't

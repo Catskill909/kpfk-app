@@ -170,3 +170,46 @@ New `test/stream_notice_test.dart` guards the notice state machine.
    Don't. See `no-snackbars` in the feature doc.
 4. Reproduce without an outage: emit `StreamNotice.connection()` on
    `noticeStream`. **Never** hardcode a notice into the bloc's initial state.
+---
+
+## Deep audit v5 (2026-08-14) — scenario coverage, and a live misclassification
+
+Writing the scenario matrix immediately caught a real bug.
+
+### Bug E — every 5xx blamed the listener's internet
+`checkServerHealth` probed with `validateStatus: (status) => status != null &&
+status < 500`, so Dio threw on any 5xx *before* the status-code branching ran.
+That made two branches of the classifier unreachable dead code — `statusCode ==
+503` and the generic 5xx case — and routed every 5xx into
+`NetworkConnectivityException`, i.e. the **connection** notice.
+
+Net effect: an overloaded Icecast returning **503**, one of the most ordinary
+outage modes a radio station has, told the listener to check their own internet
+connection while the station was the thing that was down. Same for a 5xx from
+the `.m3u` host. Fixed by accepting every status so the classifier's own
+branches decide, in both the mount probe and the playlist fetch.
+
+### Testability seam
+`StreamBloc` now depends on a `StreamSource` interface that `StreamRepository`
+implements. Production wiring is unchanged; it exists so the bloc can be driven
+by a fake, since the real repository builds a just_audio player in its
+constructor and cannot run headless. This is what makes the "stays quiet when
+nothing is wrong" half of the matrix testable at all.
+
+### Coverage added
+- `outage_scenarios_test.dart` — 17 scenarios, split into "the listener IS
+  warned" and "the listener is NOT warned". The second group is the point:
+  healthy start, rebuffering blips, pause/resume, bare error states and metadata
+  updates must all raise nothing.
+- `audio_server_health_checker_test.dart` — 503, 403, timeout, playlist 5xx,
+  captive-portal bad certificate, and proof that a failure is never cached.
+- `stream_notice_modal_golden_test.dart` — both variants rendered to PNG with
+  real Oswald/Poppins and the MaterialIcons badge, plus tap tests guarding the
+  old `AbsorbPointer` regression.
+- `widget_test.dart` — moved `setupServiceLocator()` out of `setUpAll` and into
+  the (skipped) test body. `setUpAll` runs even for skipped tests, so it was
+  spinning up audio_service/AudioSession for nothing and intermittently failing
+  the whole suite under parallel load.
+
+See `TESTING_outage_scenarios.md` for the fault→notice table and the recipes for
+reproducing each outage on a device.

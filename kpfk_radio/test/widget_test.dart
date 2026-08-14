@@ -4,16 +4,14 @@ import 'package:kpfk_radio/main.dart';
 import 'package:kpfk_radio/core/di/service_locator.dart';
 
 void main() {
-  setUpAll(() async {
-    // Initialize ServiceRegistry (new pattern)
-    await setupServiceLocator();
-  });
-
-  tearDownAll(() {
-    // Clean up is handled automatically by ServiceRegistry
-  });
 
   testWidgets('KPFK Radio App smoke test', (WidgetTester tester) async {
+    // Set up inside the test body, not setUpAll: this test is skipped, and
+    // setUpAll runs even for skipped tests. Spinning up audio_service and
+    // AudioSession platform channels for a test that never runs was a
+    // source of intermittent suite failures under parallel load.
+    await setupServiceLocator();
+
     // Build our app and trigger a frame.
     await tester.pumpWidget(const KPFKRadioApp());
 

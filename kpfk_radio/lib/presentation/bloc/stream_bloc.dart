@@ -90,13 +90,13 @@ class StreamBlocState {
 }
 
 class StreamBloc extends Bloc<StreamEvent, StreamBlocState> {
-  final StreamRepository _repository;
+  final StreamSource _repository;
   StreamSubscription? _stateSubscription;
   StreamSubscription? _metadataSubscription;
   StreamSubscription? _noticeSubscription;
 
   StreamBloc({
-    required StreamRepository repository,
+    required StreamSource repository,
   })  : _repository = repository,
         super(
           StreamBlocState(
