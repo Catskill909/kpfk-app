@@ -1,5 +1,8 @@
 # Version Management with Cider
 
+> Before accepting Xcode recommended settings or archiving, follow
+> [XCODE_RECOMMENDED_SETTINGS_WORKFLOW.md](XCODE_RECOMMENDED_SETTINGS_WORKFLOW.md).
+
 ## Current Version Info
 Your app version in pubspec.yaml is currently: `1.0.0+1`
 - `1.0.0` is the semantic version (major.minor.patch)

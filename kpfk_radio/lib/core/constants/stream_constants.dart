@@ -45,7 +45,7 @@ class StreamConstants {
   static const String twitterUrl = 'https://x.com/KPFK/';
   static const String instagramUrl = 'https://www.instagram.com/kpfk/';
   static const String youtubeUrl = 'https://www.youtube.com/@KPFKTV/videos/';
-  static const String emailAddress = 'gm@kpfk.org';
+  static const String emailAddress = 'feedback@kpfk.org';
 
   // Error Messages
 

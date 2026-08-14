@@ -169,6 +169,7 @@ Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for met
 - Status: ✅ Fully functional
 - Implementation: Native `MPNowPlayingInfoCenter` updates and `MPRemoteCommandCenter` handlers via platform channels from Flutter to Swift.
 - Features: Stable metadata display, responsive controls, proper synchronization with app state
+- Xcode maintenance and archive safety: [recommended-settings workflow](docs/XCODE_RECOMMENDED_SETTINGS_WORKFLOW.md)
 
 ## Troubleshooting
 
@@ -197,7 +198,7 @@ Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for met
 - **Network**: Pacifica Radio
 - **Website**: https://www.kpfk.org
 - **Stream URL**: https://docs.pacifica.org/kpfk/kpfk.m3u
-- **Email**: gm@kpfk.org
+- **Email**: feedback@kpfk.org
 
 ### Social Media
 - **Facebook**: https://www.facebook.com/KPFK90.7/
