@@ -44,6 +44,28 @@ the problem sends them away to wait for a station that was never down.
   `StreamNotice.detail` and renders as a small muted line for the curious.
 - **Screen readers hear what the screen says** — one announcement per notice,
   matching the visible copy.
+- **Notify before cleanup.** Once a health probe confirms an outage, publish
+  the notice before stopping/clearing platform audio controls. Cleanup can be
+  slow and must never delay the listener-facing explanation.
+- **Never reload a confirmed-dead source during cleanup.** Server-error cleanup
+  stops the player and leaves it idle. The next explicit Play rebuilds the
+  source; calling `resetToColdStart()` here would load the broken endpoint again
+  and can add more than a minute to a timeout response on iOS.
+
+## Debug-only outage rehearsal
+
+Debug builds show a bug icon in the home header. It opens **Outage Testing**
+directly and offers dead/refused/timed-out/invalid playlist presets plus direct
+previews of both notice variants. Selecting a preset stops and clears the
+currently loaded source so the next Play cannot resume stale live audio on iOS.
+Selection is confirmed with a branded modal that stays until the tester chooses
+**Go to player** or **Keep testing**—the debug workflow follows the same
+no-fleeting-snackbars rule as the listener experience.
+
+The icon, panel, and URL overrides are gated by `kDebugMode`; release builds
+continue to use the production stream and contain no testing entry point. See
+`TESTING_outage_scenarios.md` for the procedure and
+`DEVICE_TEST_outage_2026-08-14.md` for the first physical-device run.
 
 ## Where it lives (both apps, same structure)
 | File | Role |
@@ -53,6 +75,8 @@ the problem sends them away to wait for a station that was never down.
 | `presentation/bloc/stream_bloc.dart` | `notice` state, `StreamNoticeRaised` / `DismissStreamNotice` |
 | `presentation/pages/home_page.dart` | renders the modal, routes dismiss/retry |
 | `data/repositories/stream_repository.dart` | classifies the fault, emits on `noticeStream` |
+| `core/testing/debug_stream_override.dart` | debug-only stream presets and release-safe URL gate |
+| `presentation/pages/debug_outage_page.dart` | debug-only device rehearsal panel |
 | `test/stream_notice_test.dart` | notice state-machine guards |
 
 ## KPFK vs WBAI

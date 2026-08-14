@@ -213,3 +213,26 @@ nothing is wrong" half of the matrix testable at all.
 
 See `TESTING_outage_scenarios.md` for the fault→notice table and the recipes for
 reproducing each outage on a device.
+
+---
+
+## Physical-device rehearsal and timeout ordering (2026-08-14)
+
+A debug-only outage panel now redirects only the app to deterministic broken
+endpoints; it never affects the station or listeners. A `kDebugMode`-only bug
+icon opens the panel directly. Preset selection stops the loaded audio source
+before the next Play, preventing iOS resume-in-place from bypassing the chosen
+override.
+
+The first physical-iPhone run exposed a second ordering bug. The timeout probe
+confirmed `connectionTimeout` in about 13 seconds, but `_handleServerError`
+waited for `_resetAudioControlsForServerError()` before emitting the notice.
+That reset called `resetToColdStart()`, which tried to load the same unreachable
+URL and blocked for roughly another 82 seconds.
+
+The invariant is now: **classify → halt reconnect → update error state → emit
+notice → clear platform controls**. Server-error cleanup stops the player but
+does not reload a source; the next explicit Play already rebuilds from idle.
+This listener-first ordering should be ported with the debug panel to every
+sister app. Device timings and remaining classification gaps are recorded in
+`DEVICE_TEST_outage_2026-08-14.md`.

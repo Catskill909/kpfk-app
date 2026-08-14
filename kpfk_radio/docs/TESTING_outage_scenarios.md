@@ -67,26 +67,38 @@ that was never down.
 **You never take the station off air to test this.** The stream stays up and
 listeners are unaffected — the *app* is pointed somewhere broken instead.
 
-### Settings → Developer → Outage Testing (debug builds only)
+### Home bug icon → Outage Testing (debug builds only)
 
-Run a debug build (`flutter run`), open Settings, and you'll find a Developer
-section that isn't there in release. It offers two levels:
+Run a debug build (`flutter run`) and tap the bug icon in the home header. It
+opens Outage Testing directly. The icon isn't present in release builds. The
+panel offers two levels:
 
-**1 · Redirect the stream, then press play.** Pick a preset, go back, press
-play. The app runs its genuine pipeline — `.m3u` resolution, health probe,
-classification, notice — against a dead endpoint. A pass here means detection
-actually works, not merely that the modal can be drawn.
+**1 · Redirect the stream, then press play.** Pick a preset; selection
+immediately stops and clears any loaded audio source. Go back and press play.
+The app runs its genuine pipeline — `.m3u` resolution, health probe,
+classification, notice — against a dead endpoint. Clearing first matters on
+iOS, where normal pause/play deliberately resumes a live source in place.
+An acknowledged confirmation modal then offers **Go to player** (returns to the
+home screen immediately) or **Keep testing**. There is deliberately no snackbar
+that can disappear before the tester reads it.
 
 | Preset | Points at | Needs a server? | Expect |
 |---|---|---|---|
 | Live stream (normal) | the real stream | — | audio, **no modal** |
 | Server refuses connection | `127.0.0.1:9` (discard port) | no | **outage** modal |
-| Server times out | `10.255.255.1` (non-routable) | no | **outage** modal, ~10s |
+| Server times out | `10.255.255.1` (non-routable) | no | **outage** modal, about 13s on the first iPhone run |
 | Playlist 404 | a nonexistent `.m3u` path | no | **outage** modal |
 | Playlist has no stream | a URL returning HTML | no | **outage** modal |
 
 None of them need any infrastructure — they're unreachable or wrong by
 construction. Select **Live stream (normal)** when you're done.
+
+Confirmed outages are emitted before audio cleanup. Cleanup must not call
+`resetToColdStart()`: doing so reloads the broken URL. The 2026-08-14 device run
+showed that old ordering could turn ~13-second timeout detection into a
+~95-second visible response. The post-fix device rerun raised the modal path at
+~13 seconds and cleared controls in the same second. See
+`DEVICE_TEST_outage_2026-08-14.md`.
 
 **2 · Show a notice directly.** Renders either variant immediately, skipping
 detection, for checking wording, layout and the buttons on a real screen. This

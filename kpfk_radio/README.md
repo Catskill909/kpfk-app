@@ -2,7 +2,7 @@
 
 A Flutter-based radio streaming application for KPFK 90.7 FM with advanced features including background audio playback, lockscreen controls, sleep timer, and accessibility support.
 
-## Current Version: v1.0.1+7
+## Current Version: v1.0.1+12
 
 ### Recent Updates
 - Added custom typography using Google Fonts (Oswald & Poppins)
@@ -55,13 +55,13 @@ A Flutter-based radio streaming application for KPFK 90.7 FM with advanced featu
   - Connectivity monitoring with graceful offline overlays and retry controls.
   - Source: `lib/presentation/widgets/offline_modal.dart`, `lib/presentation/widgets/offline_overlay.dart`, `presentation/bloc/connectivity_cubit.dart`
 
-- Audio Server Error Handling (December 2024)
-  - Robust server error detection and user feedback system.
-  - Pre-flight server health checks before playback attempts.
-  - AudioServerErrorModal for user-friendly server error messaging.
-  - Complete audio controls reset (play button, lockscreen, notifications) on server errors.
-  - Comprehensive testing strategy with AudioServerTestingStrategy for simulating server failures.
-  - Source: `lib/presentation/widgets/audio_server_error_modal.dart`, `lib/core/services/audio_server_health_checker.dart`, `lib/core/testing/audio_server_testing_strategy.dart`
+- Stream outage and connection notices
+  - One persistent, acknowledged modal surface—no transient snackbars or duplicate inline cards.
+  - Distinguishes a confirmed station outage from a listener-side connection problem and offers Retry only when useful.
+  - Listener-first timeout handling: the notice appears as soon as detection finishes, before platform-audio cleanup.
+  - Debug builds add a home-header bug icon with deterministic outage presets, direct notice previews, and persistent modal confirmations; all testing controls are absent from release builds.
+  - Source: `lib/presentation/widgets/stream_notice_modal.dart`, `lib/core/services/audio_server_health_checker.dart`, `lib/core/testing/debug_stream_override.dart`, `lib/presentation/pages/debug_outage_page.dart`
+  - Documentation: [feature](docs/FEATURE_stream_offline_notice.md), [testing](docs/TESTING_outage_scenarios.md), [device run](docs/DEVICE_TEST_outage_2026-08-14.md)
 
 - Accessibility baseline (Sep 5, 2025)
   - Screen-reader labels for core playback and donate flows, live announcements for playback states and errors.
@@ -153,6 +153,7 @@ flutter build ios   # iOS (requires Xcode signing)
 - Bottom-right Alarm button opens the Sleep Timer overlay.
 - Bottom-left Donate button opens the in-app Donate modal WebView; external links open in the system browser.
 - Tap the top-right icon to open the Pacifica Apps & Services grid.
+- In debug builds only, tap the bug icon to open Outage Testing directly.
 
 ## Accessibility
 
@@ -172,7 +173,7 @@ Planned next steps (non-visual): focus traps in modals, `MergeSemantics` for met
 ## Troubleshooting
 
 - Stream fails to start or frequently buffers
-  - Check connectivity; see `connectivity_plus` status and retry from Snackbar.
+  - Check connectivity; connection notices provide Try again while confirmed outages ask the listener to check back.
   - Review logs via `LoggerService` in `lib/core/services/logger_service.dart`.
 
 - iOS lockscreen shows stale or no metadata

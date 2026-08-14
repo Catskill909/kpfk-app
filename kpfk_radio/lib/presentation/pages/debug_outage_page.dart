@@ -27,12 +27,79 @@ class DebugOutagePage extends StatefulWidget {
 }
 
 class _DebugOutagePageState extends State<DebugOutagePage> {
+  Future<void> _showPresetConfirmation(DebugOutagePreset preset) async {
+    final isLive = preset.url == null;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: const Color(0xFF1C1413),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: (isLive ? Colors.green : const Color(0xFFE53935))
+                      .withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isLive ? Icons.radio_rounded : Icons.science_outlined,
+                  color: isLive ? Colors.green : const Color(0xFFE53935),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                isLive ? 'Live stream restored' : 'Test ready',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.drawerTitle,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isLive
+                    ? 'The app is pointing at the real KPFK stream again. '
+                        'Return to the player and press Play.'
+                    : '${preset.label} is selected. The loaded audio source '
+                        'has been cleared, so the next Play will run this test.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium,
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Go to player'),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Keep testing'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = DebugStreamOverride.activeLabel;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Outage Testing', style: AppTextStyles.drawerTitle)),
+      appBar: AppBar(
+          title: Text('Outage Testing', style: AppTextStyles.drawerTitle)),
       body: ListView(
         children: [
           Container(
@@ -72,9 +139,10 @@ class _DebugOutagePageState extends State<DebugOutagePage> {
                 color: selected ? Theme.of(context).colorScheme.primary : null,
               ),
               title: Text(preset.label, style: AppTextStyles.bodyMedium),
-              subtitle: Text('${preset.description}\nExpect: ${preset.expected}'),
+              subtitle:
+                  Text('${preset.description}\nExpect: ${preset.expected}'),
               isThreeLine: true,
-              onTap: () {
+              onTap: () async {
                 setState(() {
                   if (preset.url == null) {
                     DebugStreamOverride.clear();
@@ -82,14 +150,14 @@ class _DebugOutagePageState extends State<DebugOutagePage> {
                     DebugStreamOverride.apply(preset);
                   }
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(preset.url == null
-                        ? 'Back to the live stream.'
-                        : 'Redirected. Go back and press play.'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                // iOS normally resumes an already-loaded source in place to
+                // avoid a lock-screen artwork flash. For outage rehearsal that
+                // would keep playing the old live source after the override
+                // changes, making the selected preset appear ineffective.
+                // Stop first so the next Play performs a cold load from the
+                // newly selected URL.
+                context.read<StreamBloc>().add(StopStream());
+                await _showPresetConfirmation(preset);
               },
             );
           }),
@@ -123,8 +191,10 @@ class _DebugOutagePageState extends State<DebugOutagePage> {
           ),
           ListTile(
             leading: const Icon(Icons.cloud_off_rounded),
-            title: Text('Show CONNECTION notice', style: AppTextStyles.bodyMedium),
-            subtitle: const Text('"Can\'t reach the stream" + Try again / Dismiss'),
+            title:
+                Text('Show CONNECTION notice', style: AppTextStyles.bodyMedium),
+            subtitle:
+                const Text('"Can\'t reach the stream" + Try again / Dismiss'),
             onTap: () {
               context
                   .read<StreamBloc>()

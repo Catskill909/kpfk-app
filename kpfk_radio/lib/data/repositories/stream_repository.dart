@@ -728,27 +728,19 @@ class StreamRepository implements StreamSource {
         break;
     }
 
-    // Reset audio controls and clear lockscreen
-    await _resetAudioControlsForServerError();
-
-    // Re-check the dismiss latch AFTER the awaits above: the user may have
-    // tapped "Got it" while this handler was mid-reset. Without this a stale,
-    // already-in-flight error would re-raise the modal we just closed.
-    if (_noticeDismissed) {
-      LoggerService.info(
-          '🎵 StreamRepository: Dismissed during handling - not re-raising modal');
-      return;
-    }
-
-    // Update audio state manager
+    // A confirmed outage must reach the listener immediately. In particular,
+    // never wait for player cleanup here: AVPlayer can spend more than a minute
+    // unwinding a timed-out source. The old ordering kept the modal hidden until
+    // that work completed, turning a ~13-second detection into a ~95-second UI
+    // response on a physical iPhone.
+    _audioHandler.haltReconnect();
     AudioStateManager().handleServerError(audioState, errorMessage);
-
-    // Signal the UI: a confirmed outage. The raw message rides along as the
-    // modal's muted detail line, never as its headline.
+    _updateState(StreamState.error);
     _emitNotice(StreamNotice.outage(detail: errorMessage));
 
-    // Update local stream state
-    _updateState(StreamState.error);
+    // The notice is now visible. Clear system audio controls afterward; this
+    // work must never gate the listener-facing explanation.
+    await _resetAudioControlsForServerError();
   }
 
   /// Reset audio controls when server errors occur
@@ -772,10 +764,11 @@ class StreamRepository implements StreamSource {
         }
       }
 
-      // Reset audio handler to cold start state
-      await _audioHandler.resetToColdStart();
-
-      LoggerService.info('🎵 StreamRepository: Audio controls reset completed');
+      // Do not call resetToColdStart() here. It resolves and loads _streamUrl,
+      // which is the endpoint we just proved is broken and can block for over a
+      // minute. stop() leaves the player idle; play() already detects idle and
+      // rebuilds a fresh source on the listener's next explicit attempt.
+      LoggerService.info('🎵 StreamRepository: Audio controls cleared');
     } catch (e) {
       LoggerService.streamError('Error resetting audio controls', e);
     }
