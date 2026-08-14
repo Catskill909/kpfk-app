@@ -11,7 +11,7 @@ import '../../services/audio_service/kpfk_audio_handler.dart';
 import '../../services/metadata_service.dart';
 import '../../services/metadata_service_native.dart';
 import '../../services/ios_lockscreen_service.dart';
-import '../../core/constants/stream_constants.dart';
+import '../../core/testing/debug_stream_override.dart';
 import '../../domain/models/stream_notice.dart';
 
 enum StreamState {
@@ -390,7 +390,7 @@ class StreamRepository implements StreamSource {
       LoggerService.warning(
           '🎵 StreamRepository: Player error - probing server to classify');
       final health = await AudioServerHealthChecker.checkServerHealth(
-          StreamConstants.streamUrl);
+          DebugStreamOverride.effectiveUrl);
       if (!health.isHealthy) {
         LoggerService.info(
             '🎵 StreamRepository: Player error is a server outage (${health.errorType}) - showing modal');
@@ -424,7 +424,7 @@ class StreamRepository implements StreamSource {
         '🎵 StreamRepository: Connecting watchdog fired (state=$_currentState) - probing server health');
     try {
       final health = await AudioServerHealthChecker.checkServerHealth(
-          StreamConstants.streamUrl);
+          DebugStreamOverride.effectiveUrl);
       if (!health.isHealthy) {
         LoggerService.info(
             '🎵 StreamRepository: Watchdog confirmed server down (${health.errorType}) - showing modal, halting reconnect');
@@ -463,7 +463,7 @@ class StreamRepository implements StreamSource {
     // Inconclusive — probe the server to tell "server down" from "other".
     try {
       final health = await AudioServerHealthChecker.checkServerHealth(
-          StreamConstants.streamUrl);
+          DebugStreamOverride.effectiveUrl);
       if (!health.isHealthy) {
         await _handleServerError(health);
         return;
