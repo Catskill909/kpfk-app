@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -116,7 +117,16 @@ class MainActivity: FlutterActivity() {
 
         // Register the receiver
         val filter = IntentFilter("kpfk_media_action")
-        registerReceiver(mediaActionReceiver, filter)
+        // This action is private to KPFK. Android 14+ requires an explicit
+        // export choice for context-registered, non-system receivers; leaving
+        // it unspecified can throw SecurityException during app startup when
+        // targeting API 34 or newer.
+        ContextCompat.registerReceiver(
+            this,
+            mediaActionReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onDestroy() {

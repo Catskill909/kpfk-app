@@ -65,7 +65,7 @@ no-fleeting-snackbars rule as the listener experience.
 The icon, panel, and URL overrides are gated by `kDebugMode`; release builds
 continue to use the production stream and contain no testing entry point. See
 `TESTING_outage_scenarios.md` for the procedure and
-`DEVICE_TEST_outage_2026-08-14.md` for the first physical-device run.
+`history/DEVICE_TEST_outage_2026-08-14.md` for the first physical-device run.
 
 ## Where it lives (both apps, same structure)
 | File | Role |
@@ -84,6 +84,6 @@ Identical except styling: KPFK is dark-only with the brand-red accent
 (`0xFFE53935`); WBAI is theme-aware (light/dark) with the blue accent.
 
 ## History
-See `STREAM_OFFLINE_MODAL_AUDIT.md` for the full audit trail — the three-surface
+See `history/STREAM_OFFLINE_MODAL_AUDIT.md` for the full audit trail — the three-surface
 mess, the `copyWith` null-clear bug, the `AbsorbPointer` dismiss blocker, and
 the silent-failure gap that the 2026-08-14 rework closed.

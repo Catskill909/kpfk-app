@@ -98,7 +98,7 @@ Confirmed outages are emitted before audio cleanup. Cleanup must not call
 showed that old ordering could turn ~13-second timeout detection into a
 ~95-second visible response. The post-fix device rerun raised the modal path at
 ~13 seconds and cleared controls in the same second. See
-`DEVICE_TEST_outage_2026-08-14.md`.
+`history/DEVICE_TEST_outage_2026-08-14.md`.
 
 **2 · Show a notice directly.** Renders either variant immediately, skipping
 detection, for checking wording, layout and the buttons on a real screen. This

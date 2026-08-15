@@ -15,8 +15,9 @@ kpfk-app/
 │   └── pubspec.yaml         # Dependencies (updated to kpfk_radio)
 ├── old-docs/                # Original WPFW documentation (33 files)
 ├── README.md                # Project overview
-├── TRANSFORMATION-SUMMARY.md # Detailed change log
-├── VERIFICATION-CHECKLIST.md # Testing checklist
+├── history/                  # Completed transformation and testing records
+│   ├── TRANSFORMATION-SUMMARY.md
+│   └── VERIFICATION-CHECKLIST.md
 └── QUICK-START.md           # This file
 ```
 
@@ -172,8 +173,8 @@ flutter run
 
 ## 📚 Documentation
 
-- **TRANSFORMATION-SUMMARY.md** - Complete list of all changes made
-- **VERIFICATION-CHECKLIST.md** - Detailed testing checklist
+- **history/TRANSFORMATION-SUMMARY.md** - Complete list of transformation changes
+- **history/VERIFICATION-CHECKLIST.md** - Historical testing checklist
 - **old-docs/** - Original WPFW app documentation for reference
 
 ## 🎯 Key Files to Know

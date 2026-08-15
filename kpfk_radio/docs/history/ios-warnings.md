@@ -202,7 +202,7 @@ This hides the warnings but does not fix the underlying code.
   only matters for symbolicating crashes *inside that FFI framework*.
 
 **Fix (chosen):** auto-generate the dSYM during archive.
-- New script: [`ios/scripts/generate_native_asset_dsyms.sh`](../ios/scripts/generate_native_asset_dsyms.sh)
+- New script: [`ios/scripts/generate_native_asset_dsyms.sh`](../../ios/scripts/generate_native_asset_dsyms.sh)
 - New Runner build phase **"Generate Native-Asset dSYMs"** (last phase, after Embed
   Pods Frameworks) calls it.
 - The script is **surgical**: it only processes frameworks present in

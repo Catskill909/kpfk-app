@@ -114,6 +114,7 @@ class SamsungMediaSessionManager(private val context: Context) {
         try {
             // Send broadcast intent that MainActivity will receive
             val intent = Intent("kpfk_media_action").apply {
+                setPackage(context.packageName)
                 putExtra("action", action)
             }
             context.sendBroadcast(intent)
@@ -228,6 +229,7 @@ class SamsungMediaSessionManager(private val context: Context) {
 
     private fun createPendingIntent(action: String): PendingIntent {
         val intent = Intent("kpfk_media_action").apply {
+            setPackage(context.packageName)
             putExtra("action", action)
         }
 

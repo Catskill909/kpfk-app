@@ -1,192 +1,160 @@
 # KPFK Radio App
 
-A Flutter-based radio streaming application for KPFK 90.7 FM Pacifica Radio with advanced features including background audio playback, lockscreen controls, sleep timer, and accessibility support.
+The official mobile app for **KPFK 90.7 FM**, Pacifica Radio's Los Angeles
+station — live streaming with background playback, lockscreen controls, a sleep
+timer, and screen-reader support on iOS and Android.
 
-## 📱 App Information
+| | |
+| --- | --- |
+| **Version** | `1.0.1+12` |
+| **Package / Bundle ID** | `app.pacifica.kpfk` |
+| **Platforms** | iOS 13+ · Android 7.0+ (API 24), targeting API 36 |
+| **Built with** | Flutter (Dart) |
+| **Station** | https://www.kpfk.org |
 
-- **App Name**: KPFK Radio
-- **Package Name**: `kpfk_radio`
-- **Android Package ID**: `app.pacifica.kpfk`
-- **iOS Bundle ID**: `app.pacifica.kpfk`
-- **Station**: KPFK 90.7 FM
-- **Network**: Pacifica Radio
-- **Website**: https://www.kpfk.org
+> **This is the repository root.** The Flutter app itself lives in
+> [`kpfk_radio/`](kpfk_radio/) and has its own
+> [engineering README](kpfk_radio/README.md). This page covers the repository as
+> a whole — what's in it, how to get building, and where every document lives.
 
-## 🚀 Quick Start
+---
 
-```bash
-# Navigate to the app directory
-cd kpfk_radio
+## 📦 What's in this Repository
 
-# Install dependencies
-flutter pub get
+| Folder | Contents |
+| --- | --- |
+| [`kpfk_radio/`](kpfk_radio/) | **The Flutter app** — Dart source, iOS and Android projects, tests, and app-level engineering docs |
+| [`docs/`](docs/) | Project-level documentation, including the [development history](docs/CHANGELOG.md) |
+| [`android-signing/`](android-signing/) | Release keystore and signing instructions. **Delivered separately — the keystore and credentials are gitignored and not in this repo** |
+| [`info/`](info/) | A standalone PHP CORS proxy and HTML "now playing" page for the station metadata feed. Server-side helper, not part of the app build |
+| [`old-docs/`](old-docs/) | Archived notes from earlier development, kept for reference |
 
-# Run the app (debug mode)
-flutter run
-
-# Build for release
-flutter build apk --release    # Android
-flutter build ios --release    # iOS
-```
-
-## 📁 Project Structure
-
-```
-kpfk-app/
-├── kpfk_radio/              # Main Flutter app directory
-│   ├── android/             # Android native code
-│   ├── ios/                 # iOS native code
-│   ├── lib/                 # Dart/Flutter source code
-│   │   ├── core/            # Constants, DI, utilities
-│   │   ├── data/            # Repositories, models
-│   │   ├── presentation/    # UI (pages, widgets, bloc)
-│   │   └── services/        # Audio, metadata services
-│   ├── docs/                # App-level documentation
-│   ├── pubspec.yaml         # Flutter dependencies
-│   └── README.md            # Detailed app documentation
-├── docs/                    # Project-level documentation
-├── old-docs/                # Legacy documentation
-└── README.md                # This file
-```
+---
 
 ## ✨ Features
 
-- **Live Audio Streaming**: High-quality audio playback with buffering optimization
-- **Background Playback**: Continue listening with the app in background
-- **Lockscreen Controls**: Full iOS/Android lockscreen integration with metadata
-- **Sleep Timer**: Customizable sleep timer with presets (15/30/45/60 minutes)
-- **Offline Detection**: Automatic network monitoring with retry functionality
-- **Donate Integration**: In-app donation modal with WebView
-- **Pacifica Network**: Access to other Pacifica stations and services
-- **Accessibility**: Screen reader support with live announcements
+Live streaming · background playback · iOS lockscreen and Android notification
+controls with station artwork · now-playing show metadata · sleep timer with
+presets · outage vs. connection notices · offline detection with automatic
+reconnect · in-app donate · Pacifica network directory · screen-reader support.
 
-## 🔧 Configuration
+Each feature, with its implementation and source paths, is documented in the
+[app README](kpfk_radio/README.md#features).
 
-### Stream URLs
+---
 
-Current stream configuration (in `lib/core/constants/stream_constants.dart`):
-- **Stream URL**: `https://docs.pacifica.org/kpfk/kpfk.m3u`
-- **Station Logo**: `https://confessor.kpfk.org/pix/KPFK.png`
-- **Website**: `https://www.kpfk.org`
+## 🚀 Getting Started
 
-### Social Media
-
-- **Facebook**: https://www.facebook.com/KPFK90.7/
-- **Twitter/X**: https://x.com/KPFK/
-- **Instagram**: https://www.instagram.com/kpfk/
-- **YouTube**: https://www.youtube.com/@KPFKTV/videos/
-- **Email**: gm@kpfk.org
-
-## 🏗️ Architecture
-
-- **Framework**: Flutter (Dart)
-- **State Management**: `flutter_bloc` + `get_it` service locator
-- **Audio Engine**: `just_audio` with `audio_service` and `audio_session`
-- **Networking**: `dio` and `http`
-- **WebView**: `flutter_inappwebview`
-- **UI**: Material 3 theme with Google Fonts (Oswald & Poppins)
-
-## 📦 Key Dependencies
-
-- `just_audio` - Audio playback
-- `audio_service` - Background audio & notifications
-- `flutter_bloc` - State management
-- `get_it` - Dependency injection
-- `flutter_inappwebview` - In-app web content
-- `connectivity_plus` - Network monitoring
-- `google_fonts` - Custom typography
-
-See `kpfk_radio/pubspec.yaml` for complete dependency list.
-
-## 🔐 Release Build Setup
-
-### Android Keystore
-
-Generate a new keystore for release builds:
+**Prerequisites** — Flutter SDK (stable channel; last verified on 3.44.3),
+Xcode + CocoaPods for iOS, Android Studio / Android SDK for Android. Run
+`flutter doctor` to confirm.
 
 ```bash
-cd kpfk_radio/android
-mkdir -p ../../kpfk-keystore
-keytool -genkey -v -keystore ../../kpfk-keystore/kpfk-upload-keystore.jks \
-  -keyalg RSA -keysize 2048 -validity 10000 -alias kpfk-upload-key
+git clone https://github.com/Catskill909/kpfk-app.git
+cd kpfk-app/kpfk_radio
+
+flutter pub get   # install dependencies
+flutter run       # run on a connected device
+
+flutter test      # unit, widget, and golden tests
+flutter analyze   # static analysis
 ```
 
-Create `kpfk_radio/android/key.properties`:
+Debug builds include an outage-testing panel for rehearsing failure states
+without touching the live stream; it is compiled out of release builds.
 
-```properties
-storePassword=YOUR_PASSWORD_HERE
-keyPassword=YOUR_PASSWORD_HERE
-keyAlias=kpfk-upload-key
-storeFile=../../kpfk-keystore/kpfk-upload-keystore.jks
-```
+---
 
-### iOS Signing
+## 🔐 Building a Signed Release
 
-Open `kpfk_radio/ios/Runner.xcworkspace` in Xcode and configure:
-- Development team
-- Signing certificates
-- Provisioning profiles
+### Android
 
-## 🧪 Testing
+The release keystore is **not in this repository** — `*.jks` and
+`key.properties` are gitignored. You need the `android-signing/` folder
+delivered separately before you can produce a Play Store build.
 
 ```bash
+# with android-signing/ present at the repo root:
+cp android-signing/key.properties kpfk_radio/android/key.properties
+
 cd kpfk_radio
-
-# Run tests
-flutter test
-
-# Analyze code
-flutter analyze
-
-# Check for issues
-flutter doctor
+flutter build appbundle --release   # Play Store upload (.aab)
+flutter build apk --release         # direct install / testing
 ```
 
-## 📚 Additional Documentation
+`versionCode` is derived automatically from the git commit count, so build
+numbers cannot collide or regress. Full details, keystore facts, and recovery
+guidance: [android-signing/SIGNING-INSTRUCTIONS.md](android-signing/SIGNING-INSTRUCTIONS.md).
 
-- **docs/QUICK-START.md** - Detailed setup and configuration guide
-- **docs/FINAL-STATUS.md** - Project transformation status
-- **docs/** - Project-level documentation and notes
-- **kpfk_radio/README.md** - In-depth app documentation
-- **kpfk_radio/docs/** - App-level documentation (architecture, lockscreen, platform notes)
-- **old-docs/** - Legacy documentation for reference
+> ⚠️ Use the **existing** keystore. Generating a new one produces an app the
+> Play Store will not accept as an update to the published listing.
 
-## 🛠️ Development
+### iOS
 
-### Prerequisites
+Open `kpfk_radio/ios/Runner.xcworkspace` in Xcode and set the development team,
+signing certificate, and provisioning profile.
 
-- Flutter SDK (stable channel)
-- Xcode (for iOS development)
-- Android Studio / Android SDK (for Android development)
+> **Build numbers:** Xcode's Archive step does *not* bump the build number.
+> After editing `version:` in `pubspec.yaml`, run
+> `flutter build ios --config-only` so the archive picks up the new value.
 
-### Running the App
+---
 
-```bash
-# Check Flutter installation
-flutter doctor
+## 🔧 Station Configuration
 
-# Navigate to app directory
-cd kpfk_radio
+All station-specific values live in one file —
+[`kpfk_radio/lib/core/constants/stream_constants.dart`](kpfk_radio/lib/core/constants/stream_constants.dart):
 
-# Get dependencies
-flutter pub get
+| Setting | Value |
+| --- | --- |
+| Stream | `https://docs.pacifica.org/kpfk/kpfk.m3u` |
+| Station logo | `https://confessor.kpfk.org/pix/KPFK.png` |
+| Website | https://www.kpfk.org |
+| Feedback | feedback@kpfk.org |
+| Facebook | https://www.facebook.com/KPFK90.7/ |
+| Twitter/X | https://x.com/KPFK/ |
+| Instagram | https://www.instagram.com/kpfk/ |
+| YouTube | https://www.youtube.com/@KPFKTV/videos/ |
 
-# Run on connected device
-flutter run
+This app shares a codebase lineage with the other Pacifica station apps (WPFW,
+WBAI) — it was built from that template and re-skinned, so fixes often port
+between them.
 
-# Run on specific device
-flutter run -d <device-id>
-```
+---
 
-## 📝 Notes
+## 📚 Documentation
 
-- This app was transformed from a WPFW Radio app to KPFK Radio
-- All WPFW references have been updated to KPFK
-- Stream URLs and social media links are configured for KPFK
-- Keystore signing must be configured before release builds
-- iOS lockscreen controls are fully functional
-- Accessibility features include screen reader support
+**Start here**
+
+- [kpfk_radio/README.md](kpfk_radio/README.md) — app features, architecture, and project structure
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — development history and release record
+- [docs/QUICK-START.md](docs/QUICK-START.md) — detailed setup and configuration
+
+**Current work in flight**
+
+- [kpfk_radio/RELEASE-TODO.md](kpfk_radio/RELEASE-TODO.md) — Android notice/debug handoff and next-session order
+- [kpfk_radio/docs/ANDROID_NOTICE_DEBUG_AUDIT_2026-08-15.md](kpfk_radio/docs/ANDROID_NOTICE_DEBUG_AUDIT_2026-08-15.md) — Android audit and pending device matrix
+
+**Doc indexes** — every document is catalogued in one of these
+
+- [docs/README.md](docs/README.md) — project-level docs: setup, build guides, and recurring-issue master records
+- [kpfk_radio/docs/README.md](kpfk_radio/docs/README.md) — app engineering docs: lockscreen system, feature design, testing, platform notes
+
+**Frequently needed**
+
+- [kpfk_radio/docs/TROUBLESHOOTING.md](kpfk_radio/docs/TROUBLESHOOTING.md) — stream, lockscreen, and WebView diagnostics
+- [kpfk_radio/docs/iOS_LOCKSCREEN_METADATA_MASTER.md](kpfk_radio/docs/iOS_LOCKSCREEN_METADATA_MASTER.md) — iOS lockscreen and metadata system
+- [kpfk_radio/docs/TESTING_outage_scenarios.md](kpfk_radio/docs/TESTING_outage_scenarios.md) — rehearsing failure states
+- [docs/lock-screen-bug.md](docs/lock-screen-bug.md) · [docs/main-screen-layout-fix.md](docs/main-screen-layout-fix.md) — **read before touching lockscreen playback or home layout**; both bugs have regressed more than once
+
+**Completed work** (records, not current guidance)
+
+- [docs/history/](docs/history/) — WPFW→KPFK transformation and closed post-mortems
+- [kpfk_radio/docs/history/](kpfk_radio/docs/history/) — lockscreen investigation, audio audits, feature rollouts
+- [old-docs/](old-docs/) — archived legacy notes
+
+---
 
 ## 📄 License
 
-Copyright © 2025 Pacifica Radio - KPFK 90.7 FM
+Copyright © 2026 Pacifica Radio — KPFK 90.7 FM
