@@ -101,7 +101,7 @@ Note also that `_reconnect()` is only ever reachable from `_handleStreamError` (
 | D2 | `ProcessingState.completed` on a live stream is treated as a clean stop, not a failure | `stream_repository.dart` listener | **Blocker** |
 | D3 | `_handleError()` only logs — every caller believes it handles something; it handles nothing | `kpfk_audio_handler.dart` | **Blocker** |
 | D4 | ~~No app-lifecycle invalidation of the audio pipeline~~ — moot once `play()` always rebuilds | `main.dart` | Resolved by P1 |
-| D5 | iOS `pause()` is non-destructive by design, preserving a stale buffer. Fixed by Phase 1 (pause = stop) | `kpfk_audio_handler.dart` / `stream_repository.dart` | High |
+| D5 | iOS `pause()` is non-destructive by design, preserving a stale buffer. **Neutralised, not changed:** `pause()` deliberately stays non-destructive (it keeps the paused lock-screen tile and active session); the buffer it leaves is simply unreachable now that `play()` always rebuilds | `kpfk_audio_handler.dart` / `stream_repository.dart` | High |
 | D6 | No liveness watchdog once playback has started (only a pre-`playing` connect watchdog) | `stream_repository.dart` | High |
 | D7 | `_resolveStreamUrl` fetches M3U with `http.get` and no timeout — can hang indefinitely on a half-open network after resume | `kpfk_audio_handler.dart` | Medium |
 | D8 | ~~`resetToColdStart()` never calls `_player.stop()`, leaving a loaded source~~ — **WITHDRAWN.** Moot once `sourceAlive` is gone, and `stop()` here blanks the Android notification. See §13 A1 | `kpfk_audio_handler.dart` | Medium |
