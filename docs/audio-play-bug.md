@@ -1,6 +1,6 @@
 # audio-play-bug.md — "Plays the cache, then STOPS"
 
-**Status:** Phases 1, 2, 5 IMPLEMENTED (2026-08-18) — **awaiting device verification (§7). Not cleared for release until §7 passes on a real iPhone.**
+**Status:** FIXED and DEVICE-VERIFIED on iPhone 17 Pro / iOS 26.6, 2026-08-18. Audio blocker cleared for release.
 **Platform reported:** iOS (confirmed by user on-device).
 **Date opened:** 2026-08-18
 **Mandate being violated:** *When audio stops it resets, and the play button ALWAYS plays the live stream and NEVER the cache.*
@@ -278,3 +278,44 @@ The guard strips `//` comments before asserting, so the HISTORY comment naming t
 Each recurrence had the same shape: someone chasing the ~2.5s iOS lock-screen Now Playing flash traded correctness for cosmetics, because the flash is *visible in five seconds* and the stale-cache failure only shows up after the app has been dormant for minutes. The flash gets noticed in dev; the cache bug gets noticed in production.
 
 **The rule, stated once so it does not need re-deriving:** the lock-screen flash is a cosmetic bug and belongs to the native `reassertNowPlaying` pre-claim. Playing minutes-old audio and then stopping is a broken product. These are not comparable, and the trade is never worth making.
+
+
+---
+
+## 11. Device verification results — 2026-08-18
+
+iPhone 17 Pro, iOS 26.6, debug build over cable. Live timestamped logs captured throughout.
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Cold start → play | Live. Play→Ready **1.5s** |
+| 2 | Pause → **7m51s** dormant → in-app play | **LIVE.** Rebuilt from live edge, no stale audio, kept playing |
+| 3 | Pause → ~3.5 min dormant → **lock-screen** play | **LIVE.** Same path, Ready 1.5s |
+| 4 | Quick pause → play (8s gap) | Live, Ready 1.4s |
+| 5 | Sustained background/lock-screen playback | No drops. Metadata + artwork updating correctly |
+| 6 | **Flash check:** repeated switching Spotify/Music ↔ KPFK | **No flash** |
+
+**Session totals: 7 plays, all logged `LIVE-ONLY: rebuilding AudioSource from the live edge`. Zero `Completed`, zero reconnect attempts, zero SEVERE. No `RESUME-IN-PLACE` line anywhere.**
+
+Test 2 is the money shot — it is the exact scenario that produced stale audio followed by a dead stop before the fix.
+
+### The finding that matters most: resume-in-place was never necessary
+
+Test 6 was expected to be the risk: `bd82526` credited resume-in-place with fixing the lock-screen flash, and Phase 1 deleted it. **There is no flash.**
+
+The other half of `bd82526` — the native `reassertNowPlaying` pre-claim, invoked at the top of `play()` before the rebuild — is sufficient on its own. It claims the Now Playing slot instantly from the native cache, which is all that was ever needed.
+
+So the original trade was not merely unwise, it was **unnecessary**: correctness was given up for a cosmetic fix that the same commit had already solved by other means. The measured cost of always rebuilding is ~1.5s play→Ready, comfortably under the ~2.6s gap that motivated the shortcut.
+
+**If the flash ever does reappear, the fix is in the native pre-claim. Never in `play()`.**
+
+### Also confirmed
+
+Lock-screen play/pause route through `KPFKAudioHandler` via audio_service's own remote-command registration, not the custom `remotePlay`/`remotePause` channel (no `🔒 REMOTE COMMAND` lines appear). Both entry points land in the same fixed `play()`, so the lock screen is covered — but note that the custom channel handlers in `metadata_service_native.dart` appear to be dead code on this iOS version. Worth a look during cleanup; not urgent.
+
+### Remaining (non-blocking)
+
+- Phase 4 (post-`playing` stall watchdog) not implemented — a defence-in-depth net for future failure modes, not required for this bug.
+- Phase 3 moot, Phase 6 partially done (structural guard landed; behavioural outage cases not extended).
+- Flutter warns UIScene lifecycle support will be required on upcoming iOS versions. Unrelated to audio; backlog item.
+- Port Phases 1/2/5 to WBAI.
