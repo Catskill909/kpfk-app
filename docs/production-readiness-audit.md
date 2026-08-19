@@ -225,6 +225,38 @@ No known-vulnerable packages surfaced.
 
 ---
 
+## H4 — Audio session activated at startup, logs paramErr (-50) every launch
+
+Observed in the Xcode console on 2026-08-19:
+
+```
+[AUDIO] Session configuration error: Error Domain=NSOSStatusErrorDomain Code=-50
+SessionCore.mm:546  Failed to set properties, error: 4294967246
+```
+
+`kpfk_audio_handler.dart` `_init()` calls `session.setActive(true)` at app
+startup, before iOS permits foreground audio, so the activation fails with
+`paramErr`.
+
+**Not a blocker, and deliberately not fixed for 1.0.2+13.** `play()` calls
+`setActive(true)` again, and that call succeeds because it is user-initiated and
+in the foreground — which is why playback works and device testing passed. The
+startup failure is a noisy log line, not a functional fault. Changing audio
+session initialisation immediately before an archive would invalidate the device
+verification for no user-visible gain.
+
+**The fix already exists in WBAI**, which does not activate at startup:
+
+> `// Configure audio session category - do NOT activate until user presses play`
+> `// Activating at startup causes iOS paramErr (-50) before foreground audio is allowed`
+
+**Next cycle:** port WBAI's `_init()` pattern to KPFK (configure only, activate
+on play) and re-verify lock-screen controls on device — the startup activation
+was originally added as a "Samsung fix" for lock-screen controls, so that claim
+needs re-testing on Android before removing it.
+
+---
+
 ## Sister app (WBAI)
 
 WBAI has received every fix from this work and was audited alongside KPFK on
