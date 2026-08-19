@@ -19,7 +19,8 @@ actually holds.
 
 | Doc | Guards against |
 | --- | --- |
-| [lock-screen-bug.md](lock-screen-bug.md) | iOS lockscreen "previous app flashes on play" — caused by the gap during `setAudioSource`; the fix is to resume in place |
+| [audio-play-bug.md](audio-play-bug.md) | **Live stream must ALWAYS play live, NEVER the cache.** `play()` rebuilds unconditionally — no resume path, no staleness window. Also: `completed` on a live stream is always a failure, never a clean stop. Includes the Android notification/MediaSession audit |
+| [lock-screen-bug.md](lock-screen-bug.md) | iOS lockscreen "previous app flashes on play" — caused by the gap during `setAudioSource`. **The fix is the native `reassertNowPlaying` pre-claim, NOT resume-in-place** (reversed 2026-08-18 — resume-in-place caused stale-audio playback) |
 | [main-screen-layout-fix.md](main-screen-layout-fix.md) | Home station image must be sized by **width**. Sizing it from leftover vertical space shrinks it — this has regressed repeatedly |
 
 ## Cross-app

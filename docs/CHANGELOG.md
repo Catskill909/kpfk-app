@@ -12,6 +12,51 @@ markers.
 
 ## Unreleased — after `1.0.1+12`
 
+### Live stream always plays live, never the cache (2026-08-18) — RELEASE BLOCKER, FIXED
+
+On iOS, pressing play after the app had been dormant played several seconds of
+stale buffered audio and then stopped dead — no error, no reconnect, no modal.
+This violated the app's core mandate: **the play button ALWAYS plays the live
+stream and NEVER the cache.**
+
+- **Root cause: a resume-in-place fast path in `play()`**, gated on `sourceAlive`
+  (`audioSource != null && processingState != idle`). That tests whether an
+  AVPlayerItem *object* exists, not whether the socket is still delivering live
+  bytes. After dormancy iOS suspends networking and Icecast drops the idle
+  client — the socket is dead, but AVPlayer still holds already-buffered bytes.
+  Resuming replayed those bytes, then hit `ProcessingState.completed` when they
+  drained. Introduced in `bd82526` (Jun 23) to hide the ~2.6s lock-screen flash.
+- **`play()` now rebuilds the AudioSource unconditionally**, every platform,
+  every press. No staleness window: elapsed time is not a liveness signal, so
+  any window is a window in which the cache plays.
+- **`completed` on a live stream is now treated as a failure**, not a clean
+  stop. A 24/7 stream has no end. It triggers reconnect in the handler and
+  routes to the error classifier in the repository — previously it mapped to
+  `StreamState.stopped`, identical to the user pressing stop, which is why the
+  failure was completely silent.
+- **`_handleError` documented as LOG ONLY.** The name implied recovery it never
+  performed, which is how this hid for two months.
+- **6s timeout on the M3U fetch**, now that every play routes through it.
+- **The flash fix never needed resume-in-place.** The native `reassertNowPlaying`
+  pre-claim added in the same commit is sufficient alone — device-verified by
+  switching repeatedly between Spotify/Music and KPFK with the rebuild
+  unconditional. Measured cost of always rebuilding: **~1.5s play→Ready**, under
+  the ~2.6s that motivated the shortcut.
+- **Android audit**: reverted an over-tightening (`resetToColdStart` using
+  `stop()`) that blanked the Android notification on the metadata-preserving
+  network-recovery path, and guarded `_reconnect()`'s source rebuild with
+  `_rebuildingSource` so reconnects no longer flash the lock screen — which
+  matters more now that `completed` routes there.
+- **Regression guard**: `test/live_stream_always_rebuilds_test.dart` fails the
+  build if a resume path, platform gate, or staleness window is reintroduced, or
+  if `completed` stops triggering recovery. Verified to fire by reintroducing
+  the bug.
+
+Device-verified on iPhone 17 Pro / iOS 26.6: 7 plays, all live, zero failures —
+including the blocker scenario (pause → 7m51s dormant → play). **Android device
+testing still outstanding.** Full analysis: [audio-play-bug.md](audio-play-bug.md).
+Master record updated: [lock-screen-bug.md](lock-screen-bug.md).
+
 ### Stream notices, outage testing, and Android audit (Aug 2026)
 
 The largest block of work since the API-36 release. Error handling moved from

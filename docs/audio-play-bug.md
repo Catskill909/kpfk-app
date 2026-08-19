@@ -1,6 +1,6 @@
 # audio-play-bug.md — "Plays the cache, then STOPS"
 
-**Status:** FIXED and DEVICE-VERIFIED on iPhone 17 Pro / iOS 26.6, 2026-08-18. Audio blocker cleared for release.
+**Status:** FIXED. iOS device-verified on iPhone 17 Pro / iOS 26.6 (§11). Android audited (§13) but **NOT device-tested — required before production release.**
 **Platform reported:** iOS (confirmed by user on-device).
 **Date opened:** 2026-08-18
 **Mandate being violated:** *When audio stops it resets, and the play button ALWAYS plays the live stream and NEVER the cache.*
@@ -104,7 +104,7 @@ Note also that `_reconnect()` is only ever reachable from `_handleStreamError` (
 | D5 | iOS `pause()` is non-destructive by design, preserving a stale buffer. Fixed by Phase 1 (pause = stop) | `kpfk_audio_handler.dart` / `stream_repository.dart` | High |
 | D6 | No liveness watchdog once playback has started (only a pre-`playing` connect watchdog) | `stream_repository.dart` | High |
 | D7 | `_resolveStreamUrl` fetches M3U with `http.get` and no timeout — can hang indefinitely on a half-open network after resume | `kpfk_audio_handler.dart` | Medium |
-| D8 | `resetToColdStart()` calls `_player.pause()` + `seek(0)` + `setAudioSource` — it never calls `_player.stop()`, so it leaves a *loaded* source behind. A "cold start" that isn't cold feeds D1 | `kpfk_audio_handler.dart` | Medium |
+| D8 | ~~`resetToColdStart()` never calls `_player.stop()`, leaving a loaded source~~ — **WITHDRAWN.** Moot once `sourceAlive` is gone, and `stop()` here blanks the Android notification. See §13 A1 | `kpfk_audio_handler.dart` | Medium |
 | D9 | Live stream never sets `AudioSource` live/stall handling options; no explicit buffer policy for live playback | `kpfk_audio_handler.dart` | Medium |
 | D10 | `seek()` is a no-op (correct) but `SeekHandler` mixin + `duration: 24h` still advertise a seekable timeline to iOS Control Center | `kpfk_audio_handler.dart` | Low |
 
@@ -195,7 +195,7 @@ This is the safety net that catches every *future* variant of "audio silently di
 ### Phase 5 — Harden the play path — Medium
 
 - **D7:** `_resolveStreamUrl` → `http.get(...).timeout(const Duration(seconds: 6))`, with the existing fallback-to-original-URL behavior on timeout.
-- **D8:** `resetToColdStart()` → call `await _player.stop()` first so it is genuinely cold, then set the source. Set `_sourceInvalidated = true`.
+- ~~**D8:** `resetToColdStart()` → `_player.stop()`~~ — **WITHDRAWN after the Android audit.** It is unnecessary once `play()` always rebuilds, and `stop()` here drops the player to `idle`, which blanks the Android notification on the metadata-preserving network-recovery path. See §13 A1.
 - **D9:** Consider `AudioSource.uri(..., )` with explicit live-appropriate buffer config; at minimum document the current defaults.
 - **D10:** Drop the fake `duration: const Duration(hours: 24)` on the MediaItem, or keep it but verify Control Center shows no scrubber. A live stream should advertise no duration.
 
@@ -250,7 +250,7 @@ Landed in one change. `flutter analyze` clean; full suite 65/65 green.
 | `kpfk_audio_handler.dart` `_handleProcessingState` | `ProcessingState.completed` now triggers `_reconnect()`, or raises an error playbackState when reconnect is halted. Was: one log line. |
 | `kpfk_audio_handler.dart` `_handlePlayerState` | Removed the duplicate log-only `completed` handling that made the case *look* covered. |
 | `kpfk_audio_handler.dart` `_handleError` | Doc comment now states plainly it is LOG ONLY and does not recover — the misleading name hid this bug for two months. |
-| `kpfk_audio_handler.dart` `resetToColdStart` | `_player.stop()` instead of `pause()` + `seek(0)`, so a "cold" reset is actually cold (D8). |
+| `kpfk_audio_handler.dart` `resetToColdStart` | ~~`_player.stop()`~~ — reverted to `pause()` + `seek(0)` after the Android audit found it blanks the notification. See §13 A1. |
 | `kpfk_audio_handler.dart` `_resolveStreamUrl` | 6s timeout on the M3U fetch. Now that every play routes through here, an untimed GET could hang forever behind the spinner on a half-open network (D7). |
 | `stream_repository.dart` playback listener | `AudioProcessingState.completed` → `_onPlayerError()` instead of `StreamState.stopped`. A dead stream now reaches the listener instead of failing silent. |
 
@@ -319,3 +319,50 @@ Lock-screen play/pause route through `KPFKAudioHandler` via audio_service's own 
 - Phase 3 moot, Phase 6 partially done (structural guard landed; behavioural outage cases not extended).
 - Flutter warns UIScene lifecycle support will be required on upcoming iOS versions. Unrelated to audio; backlog item.
 - Port Phases 1/2/5 to WBAI.
+
+
+---
+
+## 13. Android audit — 2026-08-18
+
+The live-stream fix is iOS-shaped (the resume path was `Platform.isIOS`-gated), so Android's play behaviour is **unchanged**: it always rebuilt, and it still always rebuilds. But three of the changes cross into Android's notification/MediaSession layer, and one of them was a regression I introduced and caught here.
+
+### A1 — `resetToColdStart()` using `stop()` blanked the Android notification (INTRODUCED, then REVERTED)
+
+The Phase 5 "make cold reset actually cold" change (D8) swapped `_player.pause()` for `_player.stop()`. On Android that is not cosmetic:
+
+`stop()` → `ProcessingState.idle` → in `_broadcastState`, `shouldShowPlayer` is false (the guard is `processingState != idle || _rebuildingSource`, and `_rebuildingSource` is false here) → `mediaItem.add(null)` → **the notification and lock screen blank.**
+
+The main caller is the network-recovery path in `connectivity_cubit.dart`, which passes `preserveMetadata: true` specifically so "the show info / lockscreen don't blank out". The change defeated the exact thing that call site exists to protect.
+
+**Guarding with `_rebuildingSource` would have been worse:** on the app-close path, `stopAndColdReset` calls `_audioHandler.stop()` first (deliberately clearing the tray), and a guard would have re-pushed the MediaItem straight afterwards — resurrecting a notification that was just cleared on purpose.
+
+**Resolution: D8 reverted in both apps.** It was never necessary. Its only job was to stop `resetToColdStart` leaving a source that made `sourceAlive` true — and `sourceAlive` no longer exists. `setAudioSource()` on the next line replaces the buffer anyway, and `play()` rebuilds from the live edge unconditionally regardless. It bought nothing and cost an Android blank.
+
+**Lesson worth keeping:** D8 read as an obviously-safe tightening. On iOS it was. Every change to player *state* has to be re-read through `_broadcastState`'s Android branch, because that is where `idle` becomes "erase the lock screen".
+
+### A2 — `_reconnect()` rebuilt the source unguarded (PRE-EXISTING, now FIXED)
+
+`_reconnect()` calls `setAudioSource()` without setting `_rebuildingSource`, so every reconnect flashed the same transient `idle` → MediaSession `STATE_NONE` → Samsung drops the session, art and all.
+
+This predates the live-stream fix, but Phase 2 makes it matter much more: a `completed` live stream now routes into `_reconnect()`, so reconnects go from rare to routine. Wrapped the pause/seek/setAudioSource block in the same `_rebuildingSource` guard `play()` uses.
+
+### A3 — Service configuration: no change needed
+
+- `androidStopForegroundOnPause: false` paired with `androidNotificationOngoing: false` — correct, and load-bearing for the Samsung lock-screen controls.
+- `android:stopWithTask="true"` plus the explicit `onTaskRemoved()` → `stop()` — unchanged by this work. `onTaskRemoved` still calls `stop()`, which still clears the tray.
+- Phase 2's `completed` branch adds no Android-specific risk beyond A2: when reconnect is halted it raises an error playbackState, which the repository classifies into the notice modal exactly as on iOS.
+
+### Android device testing still required
+
+Nothing here has been run on Android hardware. Per prior sessions: **use `adb logcat`, not flutter logs.** The Samsung SM-S737TL (Android 8.1) is the strict case for lock-screen/notification behaviour.
+
+| # | Android test | Watching for |
+|---|---|---|
+| 1 | Pause → 5+ min dormant → play | Live audio, keeps playing (should be unchanged — Android always rebuilt) |
+| 2 | Play → drop network mid-stream → restore | Reconnect happens; **notification art does NOT blank** (A2 fix) |
+| 3 | Network loss → recovery while paused | Show info + lock screen **stay populated** (A1 revert) |
+| 4 | Swipe app from recents while playing | Notification clears, no orphan service |
+| 5 | Swipe from recents while paused | Notification clears (historically the fragile one) |
+| 6 | Sleep timer expiry | Audio stops, tray clears |
+| 7 | Lock-screen play/pause/art through all of the above | Art stable, no blanking |

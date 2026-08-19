@@ -4,7 +4,25 @@
 > lock-screen flash bug. Every attempt (and why it failed) is recorded here so we
 > never repeat a failed approach. **Append to this doc; do not delete history.**
 
-Last updated: 2026-06-24
+Last updated: 2026-08-18
+
+> ## ⚠️ SUPERSEDED IN PART — READ THIS FIRST (2026-08-18)
+>
+> **The conclusion below — "the fix is resume-in-place" — is WRONG and has been
+> reversed.** Resume-in-place replays AVPlayer's stale buffer, which caused a
+> release-blocking bug: after the app sat dormant, play served minutes-old audio
+> and then stopped dead, silently.
+>
+> **The correct fix for the flash is the NATIVE `reassertNowPlaying` pre-claim
+> alone** — device-proven sufficient on 2026-08-18 with `play()` rebuilding
+> unconditionally every time. `play()` must ALWAYS rebuild from the live edge.
+>
+> Note attempt 5 in the log below already recorded *"No flash BUT stale audio
+> returned"*. That warning was correct and was overridden. Do not override it
+> again. Full analysis: [audio-play-bug.md](audio-play-bug.md).
+>
+> The **diagnosis** in this doc (the flash is the ~2.6s `setAudioSource` gap, not
+> a metadata race) remains correct and valuable. Only the prescribed remedy changed.
 
 ---
 
@@ -379,3 +397,49 @@ previous-app-slot fix. There may be NO prior fix for the slot-ownership flash.
 3. Record every attempt in §4 with its result before trying the next.
 4. wpfw is the working baseline — when in doubt, diff against it (whole files, not snippets).
 5. Sister app: any final fix must be ported to WBAI too.
+
+
+---
+
+## 🔁 REVERSAL — 2026-08-18: resume-in-place removed, native pre-claim is the fix
+
+**What happened.** The resume-in-place gate adopted at attempt 9 (and ported to
+WBAI) caused a release blocker on iOS: pause the app, leave it dormant several
+minutes, press play → several seconds of stale buffered audio, then playback
+stopped dead with no error, no reconnect, and no modal.
+
+**Why.** `sourceAlive` (`audioSource != null && processingState != idle`) tests
+whether an AVPlayerItem *object* exists — not whether the socket is still
+delivering live bytes. After dormancy iOS suspends networking and Icecast drops
+the idle client. The socket is dead; AVPlayer still holds already-buffered
+bytes. Resuming played those bytes — the cache — then hit
+`ProcessingState.completed` when they drained, which the app treated as a normal
+stop.
+
+**This was foreseen.** Attempt 5 in the table above records *"No flash BUT stale
+audio returned."* The tradeoff was known and accepted, and the accepted side
+turned out to be the product-breaking one. A cosmetic ~1s flash is not
+comparable to playing minutes-old audio and going silent.
+
+**The resolution — and the part that matters most:** the flash fix never needed
+resume-in-place at all. The same commit (`bd82526`) also added the native
+`reassertNowPlaying` pre-claim, which claims the Now Playing slot instantly from
+the native cache before the rebuild starts. **Device-verified 2026-08-18** on
+iPhone 17 Pro / iOS 26.6: switching repeatedly between Spotify/Music and KPFK,
+with `play()` rebuilding unconditionally on every press, produced **no flash**.
+
+Measured cost of always rebuilding: **~1.5s play→Ready** — comfortably under the
+~2.6s gap that motivated the shortcut in the first place.
+
+### The standing rule
+
+1. `play()` rebuilds the AudioSource **unconditionally**, every platform, every press.
+2. There is **no** staleness window, platform gate, or "source alive" check. Elapsed
+   time is not a liveness signal — a 5-second-old pause can have a dead socket.
+3. If the flash reappears, fix it in the **native pre-claim**
+   (`AppDelegate.swift` → `reassertNowPlaying()`), never in `play()`.
+4. `test/live_stream_always_rebuilds_test.dart` fails the build if any of the
+   above is violated. It has been verified to fire by reintroducing the bug.
+
+Ported to WBAI 2026-08-18, including the native pre-claim, which WBAI did not
+previously have. See [audio-play-bug.md](audio-play-bug.md) §12.
