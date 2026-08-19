@@ -282,12 +282,10 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Let the real metadata system be the ONLY source of MediaItem updates
     // This was the root cause of the 500ms oscillation pattern
 
-    // Handle errors through PlayerState
-    if (!state.playing &&
-        _player.processingState == ProcessingState.completed) {
-      LoggerService.audioError('Playback ended unexpectedly');
-      _handleError('Stream playback ended unexpectedly');
-    }
+    // NOTE: `completed` is handled in _handleProcessingState, which actually
+    // recovers (reconnects). It used to ALSO be handled here by calling
+    // _handleError — which only writes a log line — giving the false impression
+    // the case was covered. Deliberately not duplicated. See docs/audio-play-bug.md.
   }
 
   void _handleProcessingState(ProcessingState state) {
@@ -313,13 +311,39 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         LoggerService.info('🎵 AUDIO STATE: Ready (actively streaming)');
         break;
       case ProcessingState.completed:
-        LoggerService.info('🎵 AUDIO STATE: Completed');
+        // A 24/7 live stream HAS NO END. Reaching `completed` therefore always
+        // means the stream died — typically the buffer drained with a dead
+        // socket behind it. It is NEVER a normal end of playback.
+        //
+        // This used to fall through to a log line and nothing else, which is
+        // exactly why the "plays the cache then STOPS" bug was silent: no
+        // reconnect, no error, no modal — the app just went quiet.
+        // See docs/audio-play-bug.md.
+        LoggerService.audioError(
+            '🎵 AUDIO STATE: Completed on a LIVE stream = stream died - reconnecting');
+        if (_reconnectEnabled) {
+          _reconnect();
+        } else {
+          // Reconnect is halted (server confirmed down / user dismissed).
+          // Surface the failure rather than dying quietly.
+          playbackState.add(playbackState.value.copyWith(
+            processingState: AudioProcessingState.error,
+            playing: false,
+          ));
+        }
         break;
     }
   }
 
+  /// LOG ONLY — this does NOT recover, retry, or change state.
+  ///
+  /// Named `_handleError` historically, which read as "the error is handled"
+  /// and hid a release-blocking bug for two months: the live-stream `completed`
+  /// path called this and nothing else, so a dead stream produced one log line
+  /// and silence. Callers that need recovery MUST invoke _reconnect() or set an
+  /// error playbackState themselves. See docs/audio-play-bug.md.
   void _handleError(dynamic error) {
-    LoggerService.audioError('Audio error', error);
+    LoggerService.audioError('Audio error (logged only, not recovered)', error);
   }
 
   // Samsung/Android: pressing a media button while the stream is loading causes
@@ -455,41 +479,59 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       LoggerService.info(
           '🎯 SAMSUNG FIX: Audio focus gained successfully - lockscreen controls should now work');
 
-      // DEVICE-LOG-PROVEN FIX (2026-06-23): On iOS, `await setAudioSource()`
-      // blocks ~2.5s while it connects + buffers a fresh live AVPlayerItem.
-      // During that gap KPFK is not yet "playing", so iOS keeps the lock-screen
-      // Now Playing slot on the previously-used audio app (Spotify/Music) — THAT
-      // is the flash. Setting nowPlayingInfo can't override it; iOS only hands
-      // the slot over once KPFK is actually playing audio.
+      // ══════════════════════════════════════════════════════════════════
+      // MANDATE (do not weaken, do not add a fast path):
+      //   The play button ALWAYS plays the LIVE stream and NEVER the cache.
+      // ══════════════════════════════════════════════════════════════════
       //
-      // So: if the player still has a live source (we were paused, not stopped →
-      // processingState != idle), RESUME IN PLACE. Playback restarts in
-      // milliseconds, KPFK keeps/claims the slot instantly, and there's no gap
-      // for the other app to fill. Only rebuild when the source is gone (idle,
-      // after stop / cold start) or on Android (which relies on the fresh source).
-      final bool sourceAlive = _player.audioSource != null &&
-          _player.processingState != ProcessingState.idle;
-      if (Platform.isIOS && sourceAlive) {
-        LoggerService.info(
-            '🎯 iOS RESUME-IN-PLACE: source alive (state=${_player.processingState}) - skipping rebuild, no buffering gap, no lock-screen flash');
-      } else {
-        LoggerService.info(
-            '🎯 CACHE FIX: rebuilding AudioSource (idle/cold or Android)');
-        // Guard the transient idle that setAudioSource emits so _broadcastState
-        // keeps the current MediaItem on the notification instead of blanking it.
-        _rebuildingSource = true;
-        try {
-          final directStreamUrl = await _resolveStreamUrl(_streamUrl);
-          await _player.setAudioSource(
-            AudioSource.uri(
-              Uri.parse(directStreamUrl),
-              tag: _currentMediaItem,
-            ),
-          );
-          LoggerService.info('🎯 CACHE FIX: Fresh AudioSource set');
-        } finally {
-          _rebuildingSource = false;
-        }
+      // play() therefore rebuilds the AudioSource UNCONDITIONALLY, on every
+      // invocation, on every platform. There is deliberately no branch here.
+      //
+      // HISTORY — why a branch existed, and why it must never come back
+      // (see docs/audio-play-bug.md):
+      //
+      // Commit bd82526 (2026-06-23) added a "resume in place" fast path gated
+      // on `sourceAlive = audioSource != null && processingState != idle`.
+      // It was chasing a real cosmetic bug: `await setAudioSource()` blocks
+      // ~2.5s, and during that gap iOS leaves the lock-screen Now Playing slot
+      // on the previously-used audio app (Spotify/Music), whose art flashes.
+      //
+      // But `sourceAlive` answers "does an AVPlayerItem object still exist?".
+      // It does NOT answer "is the socket to Icecast still open and delivering
+      // live bytes?" — and for a LIVE stream only the second question matters.
+      // After the app sits dormant, iOS suspends networking and Icecast drops
+      // the idle client; the socket is dead, but AVPlayer still holds the bytes
+      // it had already buffered. Resuming played that stale buffer — audio from
+      // minutes ago, i.e. THE CACHE — and then died when it drained.
+      //
+      // Elapsed time is not a fix either: a 5-second-old pause can have a dead
+      // socket just as easily as a 5-minute-old one. There is no safe window,
+      // so there is no window. The only implementation that satisfies "NEVER"
+      // is one where resuming a buffer is unreachable code.
+      //
+      // If the lock-screen flash reappears, fix it in the NATIVE pre-claim
+      // (`reassertNowPlaying`, invoked above on the metadata channel) — never
+      // by reintroducing a conditional resume here. A cosmetic flash is a
+      // cosmetic bug; playing minutes-old audio and then stopping is a broken
+      // product. That trade was made once and cost a release.
+      //
+      // test/live_stream_always_rebuilds_test.dart guards this invariant.
+      LoggerService.info(
+          '🎯 LIVE-ONLY: rebuilding AudioSource from the live edge (unconditional)');
+      // Guard the transient idle that setAudioSource emits so _broadcastState
+      // keeps the current MediaItem on the notification instead of blanking it.
+      _rebuildingSource = true;
+      try {
+        final directStreamUrl = await _resolveStreamUrl(_streamUrl);
+        await _player.setAudioSource(
+          AudioSource.uri(
+            Uri.parse(directStreamUrl),
+            tag: _currentMediaItem,
+          ),
+        );
+        LoggerService.info('🎯 LIVE-ONLY: Fresh AudioSource set at live edge');
+      } finally {
+        _rebuildingSource = false;
       }
 
       LoggerService.info(
@@ -726,8 +768,11 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> resetToColdStart() async {
     try {
       LoggerService.info('🎵 AudioHandler: Reset to cold-start requested');
-      await _player.pause();
-      await _player.seek(Duration.zero);
+      // stop() — not pause() — so the reset is genuinely COLD: it tears the
+      // loaded source down instead of leaving a buffered one behind. A "cold
+      // start" that left audio buffered was one of the feeders of the
+      // stale-cache bug. See docs/audio-play-bug.md (D8).
+      await _player.stop();
 
       // EXPERT: Use resolved direct stream URL
       final directStreamUrl = await _resolveStreamUrl(_streamUrl);
@@ -814,8 +859,13 @@ class KPFKAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       LoggerService.info('🎵 AudioHandler: Fetching M3U playlist from: $url');
 
-      // Fetch M3U playlist content
-      final response = await http.get(Uri.parse(url));
+      // Fetch M3U playlist content. The timeout matters: play() now always
+      // rebuilds through here, and on a half-open network after resume an
+      // untimed GET can hang forever behind the spinner. On timeout we fall
+      // through to the catch below, which returns the original URL. (D7)
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 6));
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch M3U playlist: ${response.statusCode}');
       }
