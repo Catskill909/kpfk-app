@@ -257,6 +257,32 @@ needs re-testing on Android before removing it.
 
 ---
 
+## H5 — `MinimumOSVersion` 13.0, must be 15.0+ by Spring 2027
+
+App Store Connect warned on the `1.0.2+13` upload:
+
+> This app has a MinimumOSVersion of 13.0. Starting in Spring 2027, all iOS apps
+> must have a MinimumOSVersion of 15.0 or later in order to be uploaded to App
+> Store Connect or submitted for distribution.
+
+**A warning, not a rejection — the upload proceeds.** Deliberately not changed
+for `1.0.2+13`: it touches both `ios/Runner.xcodeproj` (`IPHONEOS_DEPLOYMENT_
+TARGET = 13.0`) and `ios/Podfile` (`platform :ios, '13.0'`), requires
+`pod install`, a rebuild, and device re-verification. The project's own workflow
+doc classes a deployment-target change as stop-and-review, never a pre-archive
+edit.
+
+**When you do it, the cost is near zero.** iOS 15 supports the same hardware as
+iOS 13 (iPhone 6s and later), so raising the minimum drops no devices — only
+users who declined to update the OS on a phone that can run 15.
+
+**Applies to WBAI identically** — also 13.0 in both files.
+
+**Next cycle:** bump both files to 15.0, `pod install`, rebuild, re-verify on
+device. Well before Spring 2027.
+
+---
+
 ## Sister app (WBAI)
 
 WBAI has received every fix from this work and was audited alongside KPFK on
