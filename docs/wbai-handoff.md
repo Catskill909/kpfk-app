@@ -1,5 +1,14 @@
 # WBAI Handoff — Home Screen Layout Lock, Responsive Sizing & Portrait Lock
 
+> **⚠️ HISTORICAL (June 2026) — layout/sizing only.** This document covers a
+> one-off layout port and is kept for reference. It is **not** the current WBAI
+> handoff.
+>
+> For what WBAI needs before its release — the ported audio fixes, the full iOS
+> and Android test matrices, and the outstanding blockers — see
+> **`docs/RELEASE-TESTING-HANDOFF.md` in the WBAI repo**
+> (`/Users/paulhenshaw/Desktop/wbai-app/wbai_radio/docs/`).
+
 **Date:** 2026-06-21
 **Source app:** KPFK (`kpfk_radio`) — changes verified on iOS Simulator (iPhone SE 3rd gen, iPhone 16e) and analyzed clean.
 **Target app:** WBAI — uses mostly the same Flutter template and has the **same sizing + rotation issues**. Apply the same edits.

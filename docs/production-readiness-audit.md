@@ -225,6 +225,23 @@ No known-vulnerable packages surfaced.
 
 ---
 
+## Sister app (WBAI)
+
+WBAI has received every fix from this work and was audited alongside KPFK on
+2026-08-19. Its findings, test matrices, and outstanding items live in
+`docs/RELEASE-TESTING-HANDOFF.md` in the WBAI repo.
+
+Differences worth knowing:
+- **B2 (Android 13+ notification permission) affects WBAI identically** — it is
+  unfixed in both apps.
+- **S1 does not apply.** WBAI has no signing credentials in its repo.
+- **A1 does not apply.** WBAI has no `NSAppTransportSecurity` block, so it is
+  already on Apple's defaults.
+- WBAI additionally had a **duplicate `UIBackgroundModes` key** (now fixed),
+  which KPFK did not — so WBAI's background playback needs an explicit retest.
+
+---
+
 ## Recommended order
 
 1. **B1** version bump + `flutter build ios --config-only` — mechanical, blocking.
