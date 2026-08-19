@@ -28,43 +28,86 @@ class _PacificaAppsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFF18191A),
-      appBar: AppBar(
-        backgroundColor: Color(0xFF18191A),
-        title: Text(
-          'Pacifica Foundation',
-          style: AppTextStyles.drawerTitle,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF18191A),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF18191A),
+          elevation: 0,
+          title: Text(
+            'Pacifica Foundation',
+            style: AppTextStyles.drawerTitle,
+          ),
+          bottom: TabBar(
+            indicatorColor: Colors.red,
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.tab,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white54,
+            dividerColor: Colors.white12,
+            labelStyle: AppTextStyles.sectionTitle.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+            ),
+            unselectedLabelStyle: AppTextStyles.sectionTitle.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.8,
+            ),
+            tabs: const [
+              Tab(icon: Icon(Icons.radio, size: 20), text: 'SISTER STATIONS'),
+              Tab(icon: Icon(Icons.public, size: 20), text: 'AFFILIATES'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildSisterStationsTab(context),
+            const AffiliateButtonsSection(),
+          ],
         ),
       ),
-      body: BlocBuilder<PacificaBloc, PacificaState>(
-        builder: (context, state) {
-          if (state.isLoading && state.items.isEmpty) {
-            return _buildLoadingView();
-          } else if (state.error != null && state.items.isEmpty) {
-            return _buildErrorView(context, state.error!);
-          } else {
-            return ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    "Pacifica Foundation's Sister Stations",
-                    style: AppTextStyles.showTitle.copyWith(
-                      fontSize: 20,
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+    );
+  }
+
+  Widget _buildSisterStationsTab(BuildContext context) {
+    return BlocBuilder<PacificaBloc, PacificaState>(
+      builder: (context, state) {
+        if (state.isLoading && state.items.isEmpty) {
+          return _buildLoadingView();
+        } else if (state.error != null && state.items.isEmpty) {
+          return _buildErrorView(context, state.error!);
+        }
+        return RefreshIndicator(
+          onRefresh: () async {
+            context.read<PacificaBloc>().add(RefreshPacificaItems());
+          },
+          color: Colors.white,
+          backgroundColor: Colors.black87,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+                16, 20, 16, 24 + MediaQuery.of(context).padding.bottom),
+            children: [
+              Text(
+                'Founded in 1949, the Pacifica Foundation is the nation\'s '
+                'oldest listener-supported radio network. KPFK is one of its '
+                'five sister stations \u2014 tap a logo to learn more about '
+                'each station.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: Colors.white70,
+                  fontSize: 13.5,
+                  height: 1.5,
                 ),
-                _buildGridView(context, state.items),
-                const AffiliateButtonsSection(),
-              ],
-            );
-          }
-        },
-      ),
+              ),
+              const SizedBox(height: 20),
+              _buildGridView(context, state.items),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -120,101 +163,94 @@ class _PacificaAppsView extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     final isTablet = width > 600;
     final crossAxisCount = isTablet ? 4 : 2;
-    
-    return RefreshIndicator(
-      onRefresh: () async {
-        context.read<PacificaBloc>().add(RefreshPacificaItems());
-      },
-      color: Colors.white,
-      backgroundColor: Colors.black87,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          childAspectRatio: 1.0,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          return _buildGridItem(context, items[index]);
-        },
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: 1.0,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        return _buildGridItem(context, items[index]);
+      },
     );
   }
 
   Widget _buildGridItem(BuildContext context, PacificaItem item) {
-    // Helper method to detect small phones for this page only
-    bool isSmallDevice = MediaQuery.of(context).size.shortestSide < 380;
-    
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PacificaItemDetail(item: item),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          // Remove border completely for small devices to eliminate stroke
-          border: isSmallDevice ? Border.all(
-            color: Colors.transparent,
-            width: 0,
-          ) : Border.all(
-            color: Colors.white.withValues(red: 255, green: 255, blue: 255, alpha: 40),
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(red: 0, green: 0, blue: 0, alpha: 76),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+    // Card container: a surface clearly lighter than the page with a visible
+    // border, and the logo inset inside it. This frames every logo the same
+    // way whether its own background is black (WPFW/KPFT/KPFK), red (KPFA)
+    // or white (WBAI) — dark logos no longer meld into the page background.
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF26282D),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: item.imageUrl != null
+                  ? Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.cover,
+                      frameBuilder:
+                          (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOut,
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Icon(Icons.broken_image,
+                              color: Colors.white38, size: 40),
+                        );
+                      },
+                    )
+                  : const Center(
+                      child: Icon(Icons.image, color: Colors.white38, size: 40),
+                    ),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(isSmallDevice ? 12 : 10), // Adjust for border
-          child: item.imageUrl != null
-              ? Image.network(
-                  item.imageUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[800],
-                      child: const Icon(
-                        Icons.broken_image,
-                        color: Colors.white54,
-                        size: 50,
-                      ),
-                    );
-                  },
-                )
-              : Container(
-                  color: Colors.grey[800],
-                  child: const Icon(
-                    Icons.image,
-                    color: Colors.white54,
-                    size: 50,
+          ),
+          // Ripple on top of the artwork so taps give feedback.
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PacificaItemDetail(item: item),
                   ),
-                ),
-        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
-  
-
 }
 
 class PacificaItemDetail extends StatelessWidget {
   final PacificaItem item;
 
   const PacificaItemDetail({super.key, required this.item});
-  
+
   // Helper method to remove HTML tags
   String _removeHtmlTags(String htmlString) {
     return htmlString.replaceAll(RegExp(r'<[^>]*>'), '');
@@ -233,7 +269,8 @@ class PacificaItemDetail extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: InAppWebView(
-        initialUrlRequest: URLRequest(url: WebUri.uri(Uri.dataFromString(
+        initialUrlRequest: URLRequest(
+            url: WebUri.uri(Uri.dataFromString(
           _wrapHtmlContent(item),
           mimeType: 'text/html',
           encoding: Encoding.getByName('utf-8')!,
@@ -306,4 +343,4 @@ class PacificaItemDetail extends StatelessWidget {
       </html>
     ''';
   }
-}  
+}
