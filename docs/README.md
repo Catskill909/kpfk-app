@@ -31,6 +31,7 @@ actually holds.
 | Doc | What it's for |
 | --- | --- |
 | [wbai-handoff.md](wbai-handoff.md) | Porting layout, responsive sizing, and portrait lock to the sister WBAI app |
+| [pacifica-screen.md](pacifica-screen.md) | Pacifica Foundation screen: what the two-tab rebuild changed, three audit findings (screen-reader labels, two text-scale overflows), and the **not-yet-done** port to WPFW and WBAI. WBAI is the only light-mode app — one `iconTheme` line must survive the copy |
 
 The KPFK, WBAI, and WPFW apps share a codebase lineage — fixes in one usually
 need porting to the others.

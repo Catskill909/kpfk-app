@@ -149,20 +149,33 @@ class _AffiliateButtonsSectionState extends State<AffiliateButtonsSection> {
             padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad),
             children: [
               intro,
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                itemCount: filtered.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 5.2,
+              // Two columns of rows that size themselves to their contents.
+              // A GridView's childAspectRatio would pin each row's height to
+              // the tile width, so at accessibility text sizes the two lines
+              // of text grew past it and spilled out. IntrinsicHeight lets a
+              // row grow with the text and keeps both cards in it equal.
+              for (var i = 0; i < filtered.length; i += 2)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: _AffiliateTile(
+                              affiliate: filtered[i], bordered: true),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: i + 1 < filtered.length
+                              ? _AffiliateTile(
+                                  affiliate: filtered[i + 1], bordered: true)
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                itemBuilder: (context, i) =>
-                    _AffiliateTile(affiliate: filtered[i], bordered: true),
-              ),
             ],
           );
         } else {

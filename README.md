@@ -146,6 +146,7 @@ between them.
 - [kpfk_radio/docs/iOS_LOCKSCREEN_METADATA_MASTER.md](kpfk_radio/docs/iOS_LOCKSCREEN_METADATA_MASTER.md) — iOS lockscreen and metadata system
 - [kpfk_radio/docs/TESTING_outage_scenarios.md](kpfk_radio/docs/TESTING_outage_scenarios.md) — rehearsing failure states
 - [docs/lock-screen-bug.md](docs/lock-screen-bug.md) · [docs/main-screen-layout-fix.md](docs/main-screen-layout-fix.md) — **read before touching lockscreen playback or home layout**; both bugs have regressed more than once
+- [docs/pacifica-screen.md](docs/pacifica-screen.md) — Pacifica Foundation screen audit and the **not-yet-done** port to WBAI and WPFW
 
 **Completed work** (records, not current guidance)
 

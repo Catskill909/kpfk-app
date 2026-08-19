@@ -39,7 +39,34 @@ class _PacificaAppsView extends StatelessWidget {
             'Pacifica Foundation',
             style: AppTextStyles.drawerTitle,
           ),
-          bottom: TabBar(
+          bottom: _tabBar(context),
+        ),
+        body: TabBarView(
+          children: [
+            _buildSisterStationsTab(context),
+            const AffiliateButtonsSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The tab bar, with its labels' text scaling capped at 2x.
+  ///
+  /// An icon+text tab is a fixed 72pt tall. Past roughly 2x the labels both
+  /// grow and wrap onto a second line, which bursts that height (14px of
+  /// overflow at the largest accessibility setting). Capping only the two
+  /// tab labels keeps the chrome intact; everything inside the tabs still
+  /// scales without limit. Verified clean at every text size on phones from
+  /// 320pt wide up.
+  PreferredSizeWidget _tabBar(BuildContext context) {
+    final tabBar = Builder(
+      builder: (context) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler:
+              MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 2.0),
+        ),
+        child: TabBar(
             indicatorColor: Colors.red,
             indicatorWeight: 3,
             indicatorSize: TabBarIndicatorSize.tab,
@@ -60,15 +87,12 @@ class _PacificaAppsView extends StatelessWidget {
               Tab(icon: Icon(Icons.radio, size: 20), text: 'SISTER STATIONS'),
               Tab(icon: Icon(Icons.public, size: 20), text: 'AFFILIATES'),
             ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildSisterStationsTab(context),
-            const AffiliateButtonsSection(),
-          ],
         ),
       ),
+    );
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(72),
+      child: tabBar,
     );
   }
 
@@ -182,6 +206,20 @@ class _PacificaAppsView extends StatelessWidget {
   }
 
   Widget _buildGridItem(BuildContext context, PacificaItem item) {
+    // The tile's only visible content is the logo image, so without an
+    // explicit label a screen reader announces five identical unnamed
+    // buttons. MergeSemantics folds the InkWell's tap affordance and this
+    // label into one spoken node: "KPFA 94.1 FM, button".
+    return MergeSemantics(
+      child: Semantics(
+        label: item.title.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+        button: true,
+        child: _buildGridCard(context, item),
+      ),
+    );
+  }
+
+  Widget _buildGridCard(BuildContext context, PacificaItem item) {
     // Card container: a surface clearly lighter than the page with a visible
     // border, and the logo inset inside it. This frames every logo the same
     // way whether its own background is black (WPFW/KPFT/KPFK), red (KPFA)

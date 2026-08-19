@@ -107,6 +107,33 @@ regression. See `docs/main-screen-layout-fix.md`.
 
 Snackbars vanish and confuse listeners. One modal surface — `StreamNotice`.
 
+### 3.6 NEVER run `dart format` on a directory
+
+`dart format lib/` rewrites line breaks in **every** file it is given. Run
+against `lib/` while editing two files, it reformatted 20 — including
+`ios_lockscreen_service.dart`, `android_notification_service.dart`, and
+`audio_state_manager.dart`, the exact files this project treats as untouchable
+mid-release. The changes were cosmetic reflow only and were reverted before any
+commit, but the review cost and the alarm were real, and a diff that large hides
+anything genuine inside it.
+
+**Rule:** format by explicit file path only, or not at all — never a directory,
+never `.`. Then confirm with `git status` that only the intended files changed.
+
+**This is now enforced, not just documented.** A `PreToolUse` Bash hook at
+`~/.claude/hooks/guard-wide-scope.sh` (wired in `~/.claude/settings.json`)
+hard-blocks `dart format` / `flutter format` on a directory or bare, and prompts
+for confirmation on `git clean`, `git checkout -- .`, `git restore .`, and
+`git reset --hard`. It handles `-C <dir>` and compound `a && b` commands.
+Single-file formatting and everyday git are untouched. It applies to **all three
+sister apps**, since it lives in user settings rather than any one repo.
+Review or disable it with `/hooks`; a timestamped backup of the previous
+settings sits beside `settings.json`.
+
+The same applies to any whole-tree command during a release: check `git status`
+**before and after**, and if it lists files you did not intend to touch, revert
+them individually rather than continuing.
+
 ---
 
 ## 4. Outstanding work
@@ -132,6 +159,19 @@ Version bump + full iOS and Android testing.
 items: its `reassertNowPlaying` is brand new and unexercised, and a duplicate
 `UIBackgroundModes` key was just collapsed to one, so background playback needs
 an explicit regression check.
+
+### Pacifica Foundation screen — port to WBAI and WPFW (not started)
+KPFK's two-tab rebuild shipped in `f016754`. Both siblings still run the older
+single-page version. The port is a **two-file copy plus one string edit** —
+all supporting bloc/repository/model code is already byte-identical across the
+three apps.
+
+**Do WPFW first** (dark-only, like KPFK). **WBAI second — it is the only app
+with light mode**, and its `iconTheme: const IconThemeData(color: Colors.white)`
+must be preserved or the back arrow goes dark-brown on a near-black bar.
+
+Full plan, audit findings, and per-app verification checklist:
+**`docs/pacifica-screen.md`**.
 
 ### Deferred, non-blocking
 - **ATS** — `NSAllowsArbitraryLoads` is on though all production URLs are HTTPS.
@@ -159,6 +199,7 @@ an explicit regression check.
 | Xcode Archive ignores `pubspec.yaml` version changes | Run `flutter build ios --config-only` after any version bump, then verify in the **built artifact**, not the source |
 | Bash `cd` does not persist reliably between tool calls | Use absolute paths in every command |
 | `flutter clean` | Do NOT run routinely — reserve for a genuinely stale build |
+| `dart format lib/` reformatted 20 files while two were being edited, including the lockscreen and notification services | Format by **explicit file path only**, never a directory. See §3.6 |
 
 ---
 
