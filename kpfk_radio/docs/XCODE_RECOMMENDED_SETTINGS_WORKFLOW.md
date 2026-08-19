@@ -68,3 +68,56 @@ Flutter currently warns that future iOS versions will require UIScene lifecycle
 support. Treat UIScene as a deliberate migration with its own diff, tests,
 device run, and commit. It is separate from the recommended-settings prompt and
 should not be introduced immediately before an archive.
+
+
+## Hard-won gotchas (2026-08-19, during the `1.0.2+14` release)
+
+### `flutter run` from VSCode rewrites the ephemeral build env
+
+Every VSCode debug/release run rewrote
+`ios/Flutter/ephemeral/flutter_native_integration.env` with debug values:
+
+```
+TRACK_WIDGET_CREATION  false -> true
+TREE_SHAKE_ICONS       true  -> false
+```
+
+This happened **twice** in one session. The file is tracked, so it shows up in
+`git status`. **Always `git checkout` it before archiving**, and never use
+`flutter run` merely as a way to get Xcode open — open
+`ios/Runner.xcworkspace` directly.
+
+### `plutil -extract` overwrites the input file without `-o -`
+
+```bash
+plutil -extract UIBackgroundModes json ios/Runner/Info.plist   # DESTROYS the file
+plutil -extract UIBackgroundModes json -o - ios/Runner/Info.plist   # correct
+```
+
+The first form replaced a real `Info.plist` with `["audio"]`. Recovered from
+git, but only because the file was committed. **Always pass `-o -`** when
+reading a value, or use `plutil -p` / `grep` instead.
+
+### Xcode's displayed build state goes stale when files change underneath it
+
+After editing `project.pbxproj` (deployment target), running `pod install`, and
+regenerating `Generated.xcconfig` — all while Xcode stayed open — Xcode still
+showed a "Build Succeeded" from hours earlier. Xcode caches its project model in
+memory and does not reliably reload external edits, especially a regenerated
+Pods project.
+
+**Quit Xcode entirely (`Cmd+Q`, not just closing the window) and reopen the
+workspace** after any external change to the project, Podfile, or generated
+config. A `flutter clean` is *not* needed for this — the stale state is Xcode's,
+not the build directory's.
+
+### Verify version and metadata in the built artifact, not the source
+
+`pubspec.yaml` being right does not mean the archive is right — `Generated.xcconfig`
+is what Xcode reads. Check the product:
+
+```bash
+plutil -extract CFBundleVersion raw -o - build/ios/iphoneos/Runner.app/Info.plist
+```
+
+Or, for an exported IPA, unzip it and read `Payload/Runner.app/Info.plist`.

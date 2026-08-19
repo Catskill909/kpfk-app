@@ -10,7 +10,37 @@ markers.
 
 ---
 
-## Unreleased — after `1.0.1+12`
+## `1.0.2+14` — Aug 19, 2026 · on TestFlight, Ready to Submit
+
+Ships the live-stream blocker fix from 2026-08-18 plus the release-prep work
+below. Validated by Xcode and processed by App Store Connect; awaiting an Apple
+agreement signature (Account Holder) before external distribution.
+
+### Release prep (2026-08-19)
+
+- **Version `1.0.1+12` → `1.0.2+13` → `1.0.2+14`.** `+13` was **rejected** (see
+  below) and re-cut as `+14`. Note `Generated.xcconfig` must be regenerated with
+  `flutter build ios --config-only` after any pubspec version change — Xcode
+  Archive otherwise keeps stamping the old build number.
+- **`NSMicrophoneUsageDescription` removed, then restored.** Removing it caused
+  the `+13` rejection (**ITMS-90683**). It is mandatory: `audio_session` and
+  `flutter_inappwebview_ios` reference microphone APIs, and Apple scans embedded
+  frameworks, not just the app binary. Restored with an explanatory purpose
+  string — a dismissive one invites an App Review 5.1.1 question instead.
+  Now guarded by `test/info_plist_required_keys_test.dart`.
+- **iOS deployment target `13.0` → `15.0`** (Xcode project + Podfile + a fresh
+  `pod install`), clearing **ITMS-90068** ahead of Apple's Spring 2027 deadline.
+  `Podfile.lock` moved no pod versions, and the release build was clean. No
+  devices dropped — iOS 15 supports the same hardware as iOS 13.
+- **`ITSAppUsesNonExemptEncryption=false` added**, so App Store Connect stops
+  prompting the export-compliance question on every upload.
+- **`BGTaskSchedulerPermittedIdentifiers` removed** — `BGTaskScheduler` is used
+  nowhere. `UIBackgroundModes: audio` retained; it is load-bearing.
+- **Keystore password removed from the repo** — see Open Items below.
+- **New docs:** [production-readiness-audit.md](production-readiness-audit.md)
+  (full release audit, incl. the outstanding Android 13+ notification blocker)
+  and [xcode-archive-warnings.md](xcode-archive-warnings.md) (baseline of the
+  ~40 third-party deprecation warnings every archive emits).
 
 ### Live stream always plays live, never the cache (2026-08-18) — RELEASE BLOCKER, FIXED
 
@@ -265,23 +295,52 @@ Non-visual changes only:
 
 ## Open Items
 
-### 🔑 Release keystore password is in public git history — deferred by decision
+### 🤖 Android 13+ never requests notification permission — BLOCKER for the Play release
 
-`android-signing/SIGNING-INSTRUCTIONS.md` is tracked in git and contains the
-release keystore password in plaintext. It entered history in commit `386014c`
-and is public on `github.com/Catskill909/kpfk-app`.
+`POST_NOTIFICATIONS` is declared but never requested at runtime, and
+`audio_service` does not request it either. From Android 13 it is denied by
+default, so the foreground service runs while its notification — the media
+control surface — is suppressed. Affects both apps. **Test on the API 36
+emulator**; the Samsung SM-S737TL is API 27, where the permission is granted at
+install and the bug cannot appear. Detail in
+[production-readiness-audit.md](production-readiness-audit.md) §B2.
 
-- **Not exposed:** the keystore itself. `*.jks` and `key.properties` are
+### 📋 Deferred, non-blocking
+
+- **A1 — ATS.** `NSAllowsArbitraryLoads` is on although all production URLs are
+  HTTPS. Left as-is for `1.0.2+14` (it already passed review); scope it to
+  `NSAllowsArbitraryLoadsInWebContent` next cycle, then retest the donate,
+  archive, and schedule WebViews.
+- **H4 — startup `paramErr (-50)`.** The audio session is activated in `_init()`
+  before iOS permits foreground audio. Harmless — `play()` re-activates
+  successfully — but noisy. WBAI already has the fix (configure only, activate
+  on play); port it back and re-verify lock-screen controls on Android, since
+  the startup activation was originally a Samsung fix.
+- **UIScene lifecycle** — Flutter warns it will be required on upcoming iOS
+  versions. Framework-level; arrives via a Flutter upgrade.
+- **Dependency upgrades** — `just_audio` and `audio_session` are behind, and are
+  exactly the layer verified on device. Upgrade early next cycle with a full
+  device retest, never immediately before a release.
+
+### 🔑 Release keystore password — removed from the working copy 2026-08-19
+
+`android-signing/SIGNING-INSTRUCTIONS.md` contained the release keystore
+password in plaintext, in four places, on a public repo
+(`github.com/Catskill909/kpfk-app`). **All four were removed on 2026-08-19**,
+replaced with pointers to the password manager, and the file now carries a
+security note.
+
+- **Redaction does not undo the exposure.** The password remains in git history
+  and in any clone or fork made while it was present. Treat it as permanently
+  public.
+- **Still not exposed:** the keystore itself. `*.jks` and `key.properties` are
   gitignored and have never been committed, so the password alone cannot sign
   anything.
-- **Status:** reviewed 2026-08-15 and **deliberately left as-is.** Remediation
-  requires either a history rewrite and force-push, or a Play Console upload-key
-  reset — both disruptive relative to the actual risk.
-- **If revisited, the options are:** strip the credentials from the doc going
-  forward (history retains them); rewrite history with `git filter-repo` and
-  force-push; or rotate the upload key through Play Console.
-
-*Re-check this item whenever the signing docs or the README set are revised.*
+- **Full remediation, if wanted:** rotate via a Play Console **upload key reset**
+  — supported, does not require a new listing, does not affect existing
+  installs. A history rewrite alone would not recall existing clones.
+- **Status:** working copy clean; rotation not done, and not required for
+  release.
 
 ## Backlog
 
