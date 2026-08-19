@@ -20,6 +20,7 @@ actually holds.
 | Doc | Guards against |
 | --- | --- |
 | [audio-play-bug.md](audio-play-bug.md) | **Live stream must ALWAYS play live, NEVER the cache.** `play()` rebuilds unconditionally — no resume path, no staleness window. Also: `completed` on a live stream is always a failure, never a clean stop. Includes the Android notification/MediaSession audit |
+| [production-readiness-audit.md](production-readiness-audit.md) §A3 | **`NSMicrophoneUsageDescription` must stay in Info.plist.** `audio_session` and `flutter_inappwebview_ios` reference mic APIs, so Apple rejects uploads without it (ITMS-90683) even though the app has no mic feature. Removing it *or* giving it a dismissive string both fail, in opposite ways. Guarded by `test/info_plist_required_keys_test.dart` |
 | [lock-screen-bug.md](lock-screen-bug.md) | iOS lockscreen "previous app flashes on play" — caused by the gap during `setAudioSource`. **The fix is the native `reassertNowPlaying` pre-claim, NOT resume-in-place** (reversed 2026-08-18 — resume-in-place caused stale-audio playback) |
 | [main-screen-layout-fix.md](main-screen-layout-fix.md) | Home station image must be sized by **width**. Sizing it from leftover vertical space shrinks it — this has regressed repeatedly |
 

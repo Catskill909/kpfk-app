@@ -128,17 +128,62 @@ The app uses only standard HTTPS, which is exempt. Add:
 
 ---
 
-## A3 — Microphone usage description declared, mic never used
+## A3 — Microphone usage description — ❌ MY RECOMMENDATION WAS WRONG, REVERSED
 
-```xml
-<key>NSMicrophoneUsageDescription</key>
-<string>This app does not use the microphone</string>
+**What this section originally said:** remove `NSMicrophoneUsageDescription`,
+because no microphone API is used anywhere.
+
+**That was wrong and it caused a rejected upload.** Build `1.0.2+13` came back
+with:
+
+> **ITMS-90683: Missing purpose string in Info.plist** — Your app's code
+> references one or more APIs that access sensitive user data… should contain a
+> `NSMicrophoneUsageDescription` key… If you're using external libraries or SDKs,
+> they may reference APIs that require a purpose string. **While your app might
+> not use these APIs, a purpose string is still required.**
+
+**Why the check was insufficient.** I grepped the main `Runner` binary for
+microphone symbols and found none. Apple scans **every linked binary, including
+embedded frameworks**. Scanning `Runner.app/Frameworks/` finds two:
+
+| Framework | Why it references mic APIs |
+|---|---|
+| `audio_session` | AVAudioSession category / record APIs |
+| `flutter_inappwebview_ios` | WebView `getUserMedia` support |
+
+**The key is therefore MANDATORY for as long as those plugins ship**, regardless
+of what the app does.
+
+**Resolution:** restored in both apps with an explanatory purpose string.
+
+### Why this keeps recurring — read before touching this key
+
+The key sits in a trap with a failure mode on *both* sides:
+
+- **Remove it** (it looks unused, the app has no mic feature) → **ITMS-90683**,
+  upload rejected.
+- **Restore it with a dismissive string** like *"This app does not use the
+  microphone"* → satisfies the scanner, but invites an App Review **5.1.1**
+  question about why microphone access is declared. This bit another project.
+
+Both directions look wrong, which is why it has flip-flopped repeatedly. The
+correct state is: **key present, with a string that honestly explains why the
+permission can be requested at all.**
+
+**Guarded now:** `test/info_plist_required_keys_test.dart` (both apps) fails the
+build if the key is missing, if the string is dismissive/too short, if
+`ITSAppUsesNonExemptEncryption` is absent, or if `UIBackgroundModes` is not
+declared exactly once.
+
+**If a future release genuinely drops both plugins**, verify properly before
+removing — scan the frameworks, not the main binary:
+```bash
+for f in build/ios/iphoneos/Runner.app/Frameworks/*.framework; do
+  n=$(basename "$f" .framework)
+  strings -a "$f/$n" | grep -qiE "requestRecordPermission|AVAudioRecorder|AVCaptureDevice|microphone" \
+    && echo "$n references mic APIs"
+done
 ```
-No microphone API is used anywhere (verified across Dart and Swift). Declaring a
-purpose string for an unused capability — especially one whose text says it is
-unused — invites reviewer questions for zero benefit.
-
-**Fix:** remove the key.
 
 ---
 
@@ -303,7 +348,7 @@ Differences worth knowing:
 ## Recommended order
 
 1. **B1** version bump + `flutter build ios --config-only` — mechanical, blocking.
-2. **A2, A3, A4** — three `Info.plist` edits, no behavioural risk, removes review friction.
+2. ~~**A2, A3, A4** — three `Info.plist` edits, no behavioural risk~~ — **A3 was wrong; see above.** A2 and A4 were correct and are applied. `NSMicrophoneUsageDescription` must stay.
 3. **A1** ATS scoping — needs a WebView retest pass (donate, archive, schedule).
 4. **B2** Android 13+ notification permission — the largest piece of real work,
    and it needs an Android 13+ device to verify.
