@@ -345,6 +345,28 @@ Differences worth knowing:
 
 ---
 
+## Non-technical release gate — Apple agreement must be signed by the Account Holder
+
+Hit on 2026-08-19 when adding `1.0.2 (14)` to external TestFlight: distribution
+failed because a pending Apple agreement (Developer Program License / Paid Apps)
+had not been accepted.
+
+**Only the Account Holder can accept it** — for these apps that is the Pacifica
+ED, not the developer account doing the build. No amount of rebuilding fixes it.
+
+**What is blocked:** external TestFlight and App Store release. Internal
+TestFlight generally still works, so device testing can continue while waiting.
+
+**The fix:** Account Holder signs in at appstoreconnect.apple.com → **Business**
+(shown as *Agreements, Tax, and Banking* on some accounts) → accept the pending
+agreement. A click-through, a few minutes.
+
+**Plan for the lead time.** This is an external dependency on someone else's
+calendar, so raise it *before* the build is ready rather than at submission.
+Uploaded builds stay valid for 90 days, so a signed-off build waits comfortably.
+
+---
+
 ## Recommended order
 
 1. **B1** version bump + `flutter build ios --config-only` — mechanical, blocking.
