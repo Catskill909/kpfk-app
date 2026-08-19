@@ -75,16 +75,17 @@ Requires the Flutter SDK installed (built and verified on Flutter 3.44.3).
 
 ## Credentials
 
-| Field | Value |
-|-------|-------|
-| Keystore password | `4QPDlnY*^3pXXrH5gFI!va3k` |
-| Key password | `4QPDlnY*^3pXXrH5gFI!va3k` |
+| Field | Where to find it |
+|-------|------------------|
+| Keystore password | Password manager (1Password / Bitwarden) — **not stored in this repo** |
+| Key password | Same value as the keystore password |
 
-> **Note:** PKCS12 keystores use a single password for both the keystore and the key.
-> Both values above are identical and intentional.
+> **Note:** PKCS12 keystores use a single password for both the keystore and the
+> key, so both values are identical. This is intentional.
 
-Store these credentials in a password manager (1Password, Bitwarden, etc.).
-The `key.properties` file in this folder already has them pre-filled.
+> ⚠️ **Never commit these to this repository — it is PUBLIC.** The credentials
+> live in a password manager and in the untracked `key.properties` (gitignored
+> alongside `*.jks` / `*.keystore`). See the security note at the foot of this file.
 
 ---
 
@@ -144,7 +145,7 @@ To confirm the keystore is valid and show its fingerprint:
 keytool -list -v \
   -keystore android-signing/kpfk-release.jks \
   -alias pacifica-kpfk \
-  -storepass '4QPDlnY*^3pXXrH5gFI!va3k'
+  -storepass "$KPFK_KEYSTORE_PASSWORD"
 ```
 
 ---
@@ -210,7 +211,30 @@ The path in `storeFile` is relative to `kpfk_radio/android/app/`. Check that you
 local repo folder is named `kpfk-app`. If not, update the `storeFile` path.
 
 **Wrong password error:**
-The keystore and key password are both: `4QPDlnY*^3pXXrH5gFI!va3k`
+The keystore and key password are identical — retrieve the value from the
+password manager (it is deliberately not recorded in this repo).
 
 **`keytool` not found:**
 Install the JDK: `brew install openjdk` (macOS) or install Android Studio (includes JDK).
+
+
+---
+
+## ⚠️ Security note — credential previously committed (2026-08-19)
+
+The keystore and key password were stored in plaintext in this file, and this
+repository is **public** (`github.com/Catskill909/kpfk-app`). They have now been
+removed from the working copy.
+
+**Redaction alone does not undo the exposure.** The password remains in this
+repo's git history, and in any clone, fork, or cache made while it was present.
+Treat it as permanently public.
+
+**What limits the damage:** the password by itself is not a signing credential.
+`kpfk-release.jks` and `key.properties` are correctly gitignored and have never
+been tracked (verified), so an attacker would also need the keystore file.
+
+**If full remediation is wanted:** rotate the key. With Play App Signing this is
+a supported *upload key reset* through Play Console — it does **not** require a
+new listing and does not affect existing installs. Rewriting git history is not
+sufficient by itself and cannot recall existing clones.

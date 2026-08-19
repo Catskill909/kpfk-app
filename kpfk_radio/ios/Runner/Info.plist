@@ -30,12 +30,6 @@
 		<array>
 			<string>audio</string>
 		</array>
-		<key>NSMicrophoneUsageDescription</key>
-		<string>This app does not use the microphone</string>
-		<key>BGTaskSchedulerPermittedIdentifiers</key>
-		<array>
-			<string>com.pacifica.kpfk</string>
-		</array>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
@@ -51,6 +45,8 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsArbitraryLoads</key>
