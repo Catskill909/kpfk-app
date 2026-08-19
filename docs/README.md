@@ -11,6 +11,8 @@ Project-level docs for the KPFK Radio app. App-internal engineering docs live in
 | [QUICK-START.md](QUICK-START.md) | Detailed setup and configuration walkthrough |
 | [android-build.md](android-build.md) | Android build guide — toolchain, gradle config, release steps |
 
+| [xcode-archive-warnings.md](xcode-archive-warnings.md) | **Baseline of the ~40 deprecation warnings every archive produces.** All are in third-party plugin code; none are actionable or blocking. Use it to spot a warning that is genuinely *yours* |
+
 ## Recurring-issue master records
 
 These describe bugs that have come back more than once. Read the relevant one
