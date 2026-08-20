@@ -18,7 +18,7 @@ enters the picture for the Pacifica-screen port (§4).
 
 | App | Repo | Version | Notes |
 |---|---|---|---|
-| **KPFK** (lead) | `/Users/paulhenshaw/Desktop/kpfk-app` → `kpfk_radio/` | **`1.0.2+15`** | On TestFlight (uploaded 2026-08-20) |
+| **KPFK** (lead) | `/Users/paulhenshaw/Desktop/kpfk-app` → `kpfk_radio/` | **`1.0.2+15`** | TestFlight internal + **external** testing |
 | **WBAI** (sister) | `/Users/paulhenshaw/Desktop/wbai-app/wbai_radio` | `1.0.1+8` | Fixes ported, **untested on any device** |
 | **WPFW** (origin template) | `/Users/paulhenshaw/Desktop/wpfw-app/wpfw_radio` | `1.0.1+4` | The app both others were forked from. Furthest behind; see its own `docs/SISTER_APP_PARITY_LEDGER.md` |
 
@@ -38,15 +38,18 @@ single `<app>_radio/docs/`. Don't confuse the two KPFK trees.
 
 ## 2. Current state (2026-08-19)
 
-**iOS — KPFK `1.0.2 (15)` uploaded to TestFlight 2026-08-20**, validated and
-uploaded clean, processing at time of writing. It is the first build carrying
-the Pacifica-screen accessibility and text-scale fixes (`6b5bf78`). `1.0.2 (14)`
-was the prior build and tested well.
+**iOS — KPFK `1.0.2 (15)` is live on TestFlight for INTERNAL AND EXTERNAL
+testing** (uploaded 2026-08-20, validated and uploaded clean). It is the first
+build carrying the Pacifica-screen accessibility and text-scale fixes
+(`6b5bf78`).
 
-- Blocked from external distribution by an **Apple agreement** the Pacifica ED
-  (Account Holder) must sign. Not technical, no rebuild needed. Builds stay
-  valid 90 days.
-- Build `1.0.2 (13)` was **rejected** (ITMS-90683) — see §3.
+- **The Apple agreement blocker is CLEARED.** The Pacifica ED (Account Holder)
+  signed it, which is what unlocked external distribution. Earlier notes in the
+  docs describing this as blocking are historical.
+- **Next milestone is App Store submission**, not another gate. Feedback from
+  external testers is now the gating input.
+- Build `1.0.2 (13)` was **rejected** (ITMS-90683) — see §3. `1.0.2 (14)` was
+  the prior good build. TestFlight builds stay valid 90 days.
 - Older `1.0.1 (15)` on TestFlight is a *different version train*; build numbers
   are scoped per marketing version, so it does not conflict with `1.0.2 (14)`.
 

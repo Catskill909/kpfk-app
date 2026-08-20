@@ -345,7 +345,12 @@ Differences worth knowing:
 
 ---
 
-## Non-technical release gate — Apple agreement must be signed by the Account Holder
+## Non-technical release gate — Apple agreement (RESOLVED 2026-08-20)
+
+> **Status: cleared.** The Pacifica ED signed the agreement, and `1.0.2 (15)`
+> reached **external** TestFlight on 2026-08-20. Kept as a record because it
+> recurs — agreements lapse and new ones appear (banking/tax updates, program
+> renewals), and the symptom looks like a build problem when it is not.
 
 Hit on 2026-08-19 when adding `1.0.2 (14)` to external TestFlight: distribution
 failed because a pending Apple agreement (Developer Program License / Paid Apps)
