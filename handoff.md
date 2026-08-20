@@ -18,7 +18,7 @@ enters the picture for the Pacifica-screen port (§4).
 
 | App | Repo | Version | Notes |
 |---|---|---|---|
-| **KPFK** (lead) | `/Users/paulhenshaw/Desktop/kpfk-app` → `kpfk_radio/` | **`1.0.2+14`** | On TestFlight, Ready to Submit |
+| **KPFK** (lead) | `/Users/paulhenshaw/Desktop/kpfk-app` → `kpfk_radio/` | **`1.0.2+15`** | On TestFlight (uploaded 2026-08-20) |
 | **WBAI** (sister) | `/Users/paulhenshaw/Desktop/wbai-app/wbai_radio` | `1.0.1+8` | Fixes ported, **untested on any device** |
 | **WPFW** (origin template) | `/Users/paulhenshaw/Desktop/wpfw-app/wpfw_radio` | `1.0.1+4` | The app both others were forked from. Furthest behind; see its own `docs/SISTER_APP_PARITY_LEDGER.md` |
 
@@ -38,8 +38,10 @@ single `<app>_radio/docs/`. Don't confuse the two KPFK trees.
 
 ## 2. Current state (2026-08-19)
 
-**iOS — KPFK `1.0.2 (14)` is on TestFlight and testing well.** The user is
-continuing to test from the TestFlight release build.
+**iOS — KPFK `1.0.2 (15)` uploaded to TestFlight 2026-08-20**, validated and
+uploaded clean, processing at time of writing. It is the first build carrying
+the Pacifica-screen accessibility and text-scale fixes (`6b5bf78`). `1.0.2 (14)`
+was the prior build and tested well.
 
 - Blocked from external distribution by an **Apple agreement** the Pacifica ED
   (Account Holder) must sign. Not technical, no rebuild needed. Builds stay
@@ -252,7 +254,7 @@ afterwards, and `donateUrl` is referenced only by the drawer.
 
 | Trap | Rule |
 |---|---|
-| `flutter run` from VSCode rewrites `ios/Flutter/ephemeral/flutter_native_integration.env` with debug values (`TRACK_WIDGET_CREATION=true`, `TREE_SHAKE_ICONS=false`) — happened twice | `git checkout` it before archiving. Never use `flutter run` just to open Xcode; open `ios/Runner.xcworkspace` directly |
+| `flutter run` from VSCode rewrites `ios/Flutter/ephemeral/flutter_native_integration.env` with debug values (`TRACK_WIDGET_CREATION=true`, `TREE_SHAKE_ICONS=false`) — **happened three times**, most recently found committed in that state just before the `1.0.2+15` archive | `flutter build ios --config-only` before archiving rewrites it to release values *and* syncs the build number — do both in one step. Never use `flutter run` just to open Xcode; open `ios/Runner.xcworkspace` directly |
 | `plutil -extract` **overwrites the input file** without `-o -` (destroyed a real `Info.plist`) | Always `plutil -extract KEY raw -o - file`, or use `plutil -p` / `grep` |
 | Xcode caches a stale project model across external edits (`pod install`, `project.pbxproj`, `Generated.xcconfig`) | `Cmd+Q` and reopen the workspace. A `flutter clean` is NOT the fix |
 | Xcode Archive ignores `pubspec.yaml` version changes | Run `flutter build ios --config-only` after any version bump, then verify in the **built artifact**, not the source |
@@ -299,7 +301,7 @@ All repos: `flutter analyze` clean.
 
 | | Tests | Latest commit | Working tree |
 |---|---|---|---|
-| KPFK | **69/69** | `6b5bf78` (pushed) | clean (donate change reverted, see §4) |
+| KPFK | **69/69** | see §2 — `1.0.2+15` is the TestFlight build | clean |
 | WBAI | **83/83** | `0e000d2` | clean |
 | WPFW | not run this cycle | `d218e27` | 2 files, **the user's own** — leave them |
 
