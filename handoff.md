@@ -1,4 +1,4 @@
-# handoff.md — KPFK / WBAI Radio Apps
+# handoff.md — KPFK / WBAI / WPFW Radio Apps
 
 **Purpose:** hand this project to a fresh chat window or a different LLM without
 losing context. Read this first; it points at the deeper docs rather than
@@ -10,21 +10,29 @@ repeating them.
 
 ## 1. What this is
 
-Two Flutter radio-streaming apps for Pacifica stations, built from a shared
-template (forked from `wpfw-app`; leftover `com.wpfwfm.radio/*` channel names
-confirm the lineage). **Fixes are made in one and ported to the other.**
+Three Flutter radio-streaming apps for Pacifica stations, built from a shared
+template (KPFK and WBAI were forked from `wpfw-app`; leftover
+`com.wpfwfm.radio/*` channel names confirm the lineage). **KPFK leads: fixes are
+made there and ported to the others.** Most work touches KPFK and WBAI; WPFW
+enters the picture for the Pacifica-screen port (§4).
 
 | App | Repo | Version | Notes |
 |---|---|---|---|
 | **KPFK** (lead) | `/Users/paulhenshaw/Desktop/kpfk-app` → `kpfk_radio/` | **`1.0.2+14`** | On TestFlight, Ready to Submit |
 | **WBAI** (sister) | `/Users/paulhenshaw/Desktop/wbai-app/wbai_radio` | `1.0.1+8` | Fixes ported, **untested on any device** |
+| **WPFW** (origin template) | `/Users/paulhenshaw/Desktop/wpfw-app/wpfw_radio` | `1.0.1+4` | The app both others were forked from. Furthest behind; see its own `docs/SISTER_APP_PARITY_LEDGER.md` |
 
-Both repos are **public** on GitHub (`Catskill909/kpfk-app`, `Catskill909/wbai-app`).
-Work happens directly on `main` — **never create a feature branch.**
+All three are **public** on GitHub (`Catskill909/kpfk-app`, `Catskill909/wbai-app`,
+`Catskill909/wpfw-radio`). Work happens directly on `main` — **never create a
+feature branch.**
+
+**`wpfw_radio` carries uncommitted work that is not ours** — a modified
+`pubspec.lock` and an untracked `docs/SISTER_APP_PARITY_LEDGER.md`. Preserve
+both; never `git checkout -- .` or `git clean` in that repo.
 
 **Structural note:** KPFK's project docs live at `kpfk-app/docs/` (top level) and
-app-internal docs at `kpfk-app/kpfk_radio/docs/`. WBAI has a single
-`wbai_radio/docs/`. Don't confuse the two KPFK trees.
+app-internal docs at `kpfk-app/kpfk_radio/docs/`. WBAI and WPFW each have a
+single `<app>_radio/docs/`. Don't confuse the two KPFK trees.
 
 ---
 
@@ -43,6 +51,12 @@ continuing to test from the TestFlight release build.
 **Android — untested, has a known blocker.** Planned next.
 
 **WBAI — code complete, never run on a device** (iOS or Android).
+
+**Pacifica Foundation screen — audited and fixed on KPFK** (`6b5bf78`). Three
+defects found and closed: missing screen-reader labels on the sister-station
+logos, and two layouts that overflowed at accessibility text sizes. Confined to
+the two files that make up that screen; no playback, network, or lifecycle code
+touched. See `docs/pacifica-screen.md`.
 
 ---
 
@@ -160,18 +174,63 @@ items: its `reassertNowPlaying` is brand new and unexercised, and a duplicate
 `UIBackgroundModes` key was just collapsed to one, so background playback needs
 an explicit regression check.
 
-### Pacifica Foundation screen — port to WBAI and WPFW (not started)
-KPFK's two-tab rebuild shipped in `f016754`. Both siblings still run the older
-single-page version. The port is a **two-file copy plus one string edit** —
-all supporting bloc/repository/model code is already byte-identical across the
-three apps.
+### Pacifica Foundation screen — port to WPFW and WBAI (not started)
+KPFK's two-tab rebuild shipped in `f016754`; its three accessibility and
+text-scale fixes shipped in `6b5bf78`. **Port the current KPFK version — the
+fixes are already in it**, so there is no longer any reason to copy the older
+unfixed state. Both siblings still run the pre-rebuild single-page version.
+
+The port is a **two-file copy plus one string edit**. All supporting
+bloc/repository/model code was verified byte-identical across the three apps on
+2026-08-19, and neither target file contains station names, URLs, or per-station
+colors.
 
 **Do WPFW first** (dark-only, like KPFK). **WBAI second — it is the only app
-with light mode**, and its `iconTheme: const IconThemeData(color: Colors.white)`
-must be preserved or the back arrow goes dark-brown on a near-black bar.
+with light mode** (`themeMode` is user-selectable; its light AppBar foreground
+is `WBAIColors.darkBrown`), so its
+`iconTheme: const IconThemeData(color: Colors.white)` must be preserved or the
+back arrow goes dark-brown on a near-black bar.
 
 Full plan, audit findings, and per-app verification checklist:
 **`docs/pacifica-screen.md`**.
+
+### Donate URL — GM request, DEFERRED on App Review risk (2026-08-19)
+The KPFK GM asked to repoint the **side-drawer** Donate link from
+`https://docs.pacifica.org/kpfk/donate/` to `https://kpfk.org/donate`. It was
+changed, then **reverted before commit**. Both URLs are live (200).
+
+**Why it was held back:** the destination is a commercial donation page, and
+App Review scrutinises payment flows that appear inside an app. Taking money for
+digital content through anything but In-App Purchase breaches **Guideline 3.1.1**;
+non-profit donations are a documented exception (**3.2.1(vi)**) but the exception
+is conditional and Review does reject on it.
+
+**How each donate path actually opens** — verified in the package source, not
+assumed:
+
+- **Drawer** → `_launchUrl` calls `launchUrl(...)` with no `mode:`, so it gets
+  `platformDefault`. In `url_launcher_ios` 6.4.1 that resolves to **in-app**
+  for any `http/https` URL (`url_launcher_ios.dart` ~line 89 → 
+  `openUrlInSafariViewController`). So it is an **`SFSafariViewController`
+  sheet**, not the Safari app: browser-like, non-editable URL, no free
+  navigation.
+- **Home screen** → `DonateWebViewSheet`, a real **`WKWebView`** via
+  `flutter_inappwebview`, with its own hardcoded `docs.pacifica.org` URL.
+
+Both are in-app. `SFSafariViewController` is Apple's own sandboxed component
+and the app cannot read or script it; the bottom sheet is an embedded webview
+the app hosts. For a payment flow the bottom sheet is the more exposed of the
+two.
+
+**Key point if this is revisited:** reverting did not remove the mechanism. The
+drawer already opens a donate page in `SFSafariViewController` today, and that
+ships in `1.0.2 (14)`. The change was only ever about the **destination**, so
+the open question is whether `kpfk.org/donate` reads as more commercial to a
+reviewer than the Pacifica-hosted page — a judgement about the page, not the
+plumbing.
+
+Decide the App Review question first; changing the constant is a one-line edit
+afterwards, and `donateUrl` is referenced only by the drawer.
 
 ### Deferred, non-blocking
 - **ATS** — `NSAllowsArbitraryLoads` is on though all production URLs are HTTPS.
@@ -236,12 +295,13 @@ Full plan, audit findings, and per-app verification checklist:
 
 ## 8. Health check
 
-Both repos: `flutter analyze` clean, working tree clean, pushed.
+All repos: `flutter analyze` clean.
 
-| | Tests | Latest commit |
-|---|---|---|
-| KPFK | **69/69** | `997388c` |
-| WBAI | **83/83** | `0e000d2` |
+| | Tests | Latest commit | Working tree |
+|---|---|---|---|
+| KPFK | **69/69** | `6b5bf78` (pushed) | clean (donate change reverted, see §4) |
+| WBAI | **83/83** | `0e000d2` | clean |
+| WPFW | not run this cycle | `d218e27` | 2 files, **the user's own** — leave them |
 
 If a guard test fails (`live_stream_always_rebuilds_test.dart` or
 `info_plist_required_keys_test.dart`), **do not "fix" it by weakening the test** —

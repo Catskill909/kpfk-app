@@ -1,6 +1,7 @@
 # Pacifica Foundation screen — audit and sister-app port plan
 
-**Audited:** 2026-08-19 · **KPFK state:** shipped in `f016754` · **Ported:** not yet
+**Audited:** 2026-08-19 · **KPFK rebuild:** `f016754` · **KPFK fixes:** `6b5bf78`
+· **Ported to WPFW/WBAI:** not yet
 
 The Pacifica Foundation screen was rebuilt as a two-tab layout (Sister Stations
 / Affiliates). It is verified good on iPhone and iPad. WBAI and WPFW still run
@@ -31,10 +32,13 @@ Supporting code — `pacifica_bloc.dart`, both repositories, both models — was
 
 ---
 
-## 2. Audit findings
+## 2. Audit findings — ALL THREE FIXED on KPFK in `6b5bf78`
 
 All three were reproduced by running them, not inferred. None affect normal
-text sizes, which is why the screen tests clean on device.
+text sizes, which is why the screen tested clean on device.
+
+They are recorded here as the reasoning behind the fix, and because **the same
+three defects exist in WPFW and WBAI** until the port happens.
 
 ### 2.1 Sister-station tiles have no screen-reader label
 
@@ -47,7 +51,7 @@ Evidence: `Semantics` / `semanticLabel` / `tooltip:` appear in four files under
 `stream_notice_modal.dart`. Both Pacifica files have **zero**. The rest of the
 app is labelled; this screen is the gap.
 
-Fix when taken: wrap the tile in `Semantics(label: <station title>, button: true)`
+**Fixed** by wrapping the tile in `Semantics(label: <station title>, button: true)`
 inside a `MergeSemantics`, with the feed title stripped of its HTML tags.
 
 ### 2.2 Tablet affiliate grid overflows at accessibility text sizes
@@ -61,8 +65,10 @@ height to the tile width, so the two lines of text outgrow it as text scales.
 | 2.0x | `RenderFlex overflowed by 11 pixels` |
 | 3.0x | `RenderFlex overflowed by 53 pixels` |
 
-Fix when taken: drop `childAspectRatio` and pass `mainAxisExtent`, measuring
-the two text styles with a `TextPainter` at the current `MediaQuery.textScalerOf`.
+**Fixed** by replacing the grid with rows that size themselves to their
+contents (`IntrinsicHeight` + two `Expanded` tiles). A first attempt computed
+the row height with a `TextPainter` and was discarded — it failed at *normal*
+text size, 13px over. Self-sizing rows need no measurement and cannot drift.
 
 ### 2.3 Tab bar overflows at the largest text size
 
@@ -75,10 +81,10 @@ height — a single-line measurement understates it.
 | 1.0x – 2.0x | Clean |
 | 3.0x | `RenderFlex overflowed by 14 pixels` |
 
-Fix when taken: measure each label with a `TextPainter` constrained to the real
-tab width (`screenWidth / 2 - 32`, since `TabBar`'s default `labelPadding` is 16
-a side) so wrapping is counted, pass the result to `Tab(height:)`, and drop the
-decorative icon past roughly 1.5x so the label gets that room.
+**Fixed** by capping the two tab labels' text scaling at 2x, inside a
+`MediaQuery` that wraps only the `TabBar`. Verified clean at every text size on
+phones from 320pt wide up. Content inside the tabs still scales without limit;
+only the chrome is capped.
 
 ### 2.4 Minor, non-blocking
 
@@ -144,12 +150,14 @@ only theme-related difference in either file.
 The tab bar's `labelColor: Colors.white` / `unselectedLabelColor: Colors.white54`
 are already hardcoded and are correct against the dark bar in both modes.
 
-### 3.3 Port exactly what shipped
+### 3.3 Port the current KPFK version — fixes included
 
-Port the screen **as it is on device today**. Do not fold the §2 fixes into the
-port — that would put unvalidated changes into two apps at once. Bring the
-siblings to parity first; take §2 as a separate, deliberate change across all
-three afterwards.
+**This guidance reversed on 2026-08-19.** It originally said to port the older
+unfixed screen and treat §2 separately. The §2 fixes then shipped to KPFK in
+`6b5bf78`, so that reason is gone: copy KPFK's files as they stand now and the
+siblings arrive at parity with the fixes already in them.
+
+Do not re-derive the fixes by hand in each app — copy the files.
 
 ---
 
